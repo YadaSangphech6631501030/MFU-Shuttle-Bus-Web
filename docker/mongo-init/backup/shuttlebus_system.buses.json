@@ -1,0 +1,54 @@
+[{
+  "_id": {
+    "$oid": "6a3e3304b3f643ee6cc774ea"
+  },
+  "busNumber": "1",
+  "line": "1",
+  "currentStationIndex": 4,
+  "status": "RUNNING"
+},
+{
+  "_id": {
+    "$oid": "6a3e3304b3f643ee6cc774eb"
+  },
+  "busNumber": "2",
+  "line": "1",
+  "currentStationIndex": 3,
+  "status": "RUNNING"
+},
+{
+  "_id": {
+    "$oid": "6a3e3304b3f643ee6cc774ec"
+  },
+  "busNumber": "3",
+  "line": "1",
+  "currentStationIndex": 5,
+  "status": "ARRIVING"
+},
+{
+  "_id": {
+    "$oid": "6a3e3304b3f643ee6cc774ed"
+  },
+  "busNumber": "4",
+  "line": "2",
+  "currentStationIndex": 2,
+  "status": "RUNNING"
+},
+{
+  "_id": {
+    "$oid": "6a3e3304b3f643ee6cc774ee"
+  },
+  "busNumber": "5",
+  "line": "2",
+  "currentStationIndex": 4,
+  "status": "STOPPED"
+},
+{
+  "_id": {
+    "$oid": "6a3e3304b3f643ee6cc774ef"
+  },
+  "busNumber": "6",
+  "line": "2",
+  "currentStationIndex": 6,
+  "status": "RUNNING"
+}]

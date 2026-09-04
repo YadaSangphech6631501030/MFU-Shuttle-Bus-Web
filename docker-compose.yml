@@ -1,0 +1,77 @@
+services:
+  mongo:
+    image: mongo:7
+    container_name: mfu-shuttle-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_DATABASE: ${DB_NAME:-shuttlebus_system}
+    volumes:
+      - mongo-data:/data/db
+      - ./docker/mongo-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build:
+      context: ./backend-node
+      args:
+        INSTALL_DETECTOR: ${INSTALL_DETECTOR:-true}
+    image: mfu-shuttle-bus-backend:latest
+    container_name: mfu-shuttle-backend
+    restart: unless-stopped
+    ports:
+      - "5001:5001"
+    environment:
+      PORT: 5001
+      MONGO_URI: mongodb://mongo:27017/
+      DB_NAME: ${DB_NAME:-shuttlebus_system}
+      SECRET_KEY: ${SECRET_KEY:-super_secret_key_123}
+      CAMERA_URL: ${CAMERA_URL:-http://192.168.110.234:4747/video}
+      SAVE_INTERVAL: ${SAVE_INTERVAL:-5}
+      DETECTOR_ENABLED: ${INSTALL_DETECTOR:-true}
+    volumes:
+      - backend-runtime:/app/runtime
+    depends_on:
+      mongo:
+        condition: service_healthy
+
+  admin-web:
+    build:
+      context: ./admin-web
+      args:
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5001}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+    image: mfu-shuttle-bus-admin-web:latest
+    container_name: mfu-shuttle-admin-web
+    restart: unless-stopped
+    ports:
+      - "8080:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  flutter-web:
+    profiles:
+      - flutter-web
+    build:
+      context: ./frontend-vue
+      args:
+        API_BASE_URL: ${FLUTTER_API_BASE_URL:-http://localhost:5001}
+    image: mfu-shuttle-bus-flutter-web:latest
+    container_name: mfu-shuttle-flutter-web
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+
+volumes:
+  mongo-data:
+  backend-runtime:

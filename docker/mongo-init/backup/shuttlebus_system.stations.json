@@ -1,0 +1,391 @@
+[{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0b4"
+  },
+  "id": "station01",
+  "name": "Lamduan Dormitory 2",
+  "nameTH": "ลำดวน 2",
+  "lat": 20.058752,
+  "lng": 99.898396,
+  "lines": [
+    "line1"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0b5"
+  },
+  "id": "station02",
+  "name": "Lamduan Dormitory 7 (Outbound)",
+  "nameTH": "ลำดวน 7 ขาออก",
+  "lat": 20.057039,
+  "lng": 99.89693,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0b6"
+  },
+  "id": "station03",
+  "name": "Staff Housing Junction",
+  "nameTH": "แยกบ้านพักบุคลากร",
+  "lat": 20.054683,
+  "lng": 99.894515,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0b7"
+  },
+  "id": "station04",
+  "name": "D2 Museum Building",
+  "nameTH": "อาคารพิพิธภัณฑ์ D2",
+  "lat": 20.052544,
+  "lng": 99.892316,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0b8"
+  },
+  "id": "station05",
+  "name": "Chinese Dormitory (Inbound)",
+  "nameTH": "หอพักจีน ขาเข้า",
+  "lat": 20.050817,
+  "lng": 99.89122,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0b9"
+  },
+  "id": "station06",
+  "name": "Chinese Center (Inbound)",
+  "nameTH": "หอพักจีน ขาออก",
+  "lat": 20.049137,
+  "lng": 99.89125,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0ba"
+  },
+  "id": "station07",
+  "name": "F Parking Lot",
+  "nameTH": "ลานจอด F",
+  "lat": 20.048193,
+  "lng": 99.893221,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0bb"
+  },
+  "id": "station08",
+  "name": "D1 Building",
+  "nameTH": "อาคาร D1",
+  "lat": 20.047265,
+  "lng": 99.893146,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0bc"
+  },
+  "id": "station09",
+  "name": "Oval Pond",
+  "nameTH": "สระน้ำวงรี",
+  "lat": 20.045503,
+  "lng": 99.891442,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0bd"
+  },
+  "id": "station10",
+  "name": "E2 Building (Inbound)",
+  "nameTH": "อาคาร E2 ขาเข้า",
+  "lat": 20.043881,
+  "lng": 99.893486,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0be"
+  },
+  "id": "station11",
+  "name": "C4 Auditorium",
+  "nameTH": "หอประชุม C4",
+  "lat": 20.04392,
+  "lng": 99.894909,
+  "lines": [
+    "line1"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0bf"
+  },
+  "id": "station12",
+  "name": "C5 Building",
+  "nameTH": "อาคาร C5",
+  "lat": 20.043311,
+  "lng": 99.895297,
+  "lines": [
+    "line1"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c0"
+  },
+  "id": "station13",
+  "name": "E2 Building (Outbound)",
+  "nameTH": "อาคาร E2 ขาออก",
+  "lat": 20.043846,
+  "lng": 99.893475,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c1"
+  },
+  "id": "station14",
+  "name": "M-Square Building",
+  "nameTH": "อาคาร M-square",
+  "lat": 20.045659,
+  "lng": 99.891332,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c2"
+  },
+  "id": "station15",
+  "name": "Chinese Center (Outbound)",
+  "nameTH": "ศูนย์จีน ขาออก",
+  "lat": 20.049391,
+  "lng": 99.891113,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c3"
+  },
+  "id": "station16",
+  "name": "Chinese Dormitory (Outbound)",
+  "nameTH": "หอพักจีน ขาออก",
+  "lat": 20.05083,
+  "lng": 99.891157,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c4"
+  },
+  "id": "station17",
+  "name": "Lamduan Center",
+  "nameTH": "ศูนย์ลำดวน",
+  "lat": 20.05269,
+  "lng": 99.892342,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c5"
+  },
+  "id": "station18",
+  "name": "Swimming Pool Entrance",
+  "nameTH": "ทางเข้าสระว่างน้ำ",
+  "lat": 20.054732,
+  "lng": 99.89448,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c6"
+  },
+  "id": "station19",
+  "name": "Lamduan Dormitory 7 (Inbound)",
+  "nameTH": "ลำดวน 7 ขาเข้า",
+  "lat": 20.056898,
+  "lng": 99.897119,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c7"
+  },
+  "id": "station20",
+  "name": "Lamduan Food Court",
+  "nameTH": "ศูนย์อาหารลำดวน",
+  "lat": 20.058064,
+  "lng": 99.897875,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c8"
+  },
+  "id": "station21",
+  "name": "Minnimart Lamduan",
+  "nameTH": "",
+  "lat": 20.058967,
+  "lng": 99.899517,
+  "lines": [
+    "line1",
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": ""
+},
+{
+  "_id": {
+    "$oid": "6a3cefba80189111fe58e0c9"
+  },
+  "id": "station22",
+  "name": "MFU Medical Center",
+  "nameTH": "7-11 ลำดวน",
+  "lat": 20.041244,
+  "lng": 99.894427,
+  "lines": [
+    "line2"
+  ],
+  "waiting": 0,
+  "status": "LOW",
+  "cameraUrl": "",
+  "detectionRoi": []
+}]

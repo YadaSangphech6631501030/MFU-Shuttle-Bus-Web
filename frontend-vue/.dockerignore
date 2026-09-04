@@ -1,0 +1,10 @@
+.dart_tool
+build
+android/.gradle
+ios/Pods
+linux
+macos
+windows
+.DS_Store
+*.log
+devtools_options.yaml

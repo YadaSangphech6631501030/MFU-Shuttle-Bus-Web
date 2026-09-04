@@ -1,0 +1,36 @@
+[{
+  "_id": {
+    "$oid": "6a1d329970ad9fc8d8c7571e"
+  },
+  "username": "T.admin",
+  "email": "T@gmail.com",
+  "password": "$2b$10$sxu88QX1M/neY2T98r5b8O92TGRWZ9134oA1YngkczZZTUQwzF1XK",
+  "role": "admin"
+},
+{
+  "_id": {
+    "$oid": "6a1e7979fce4820216e337fc"
+  },
+  "username": "T",
+  "email": "T@gmail.com",
+  "password": "$2b$10$a6AUKhdYJPQeh.ULwkWzKudeuj46iKTqVYqUkuXk.X0ZqGhbqlaL6",
+  "role": "user"
+},
+{
+  "_id": {
+    "$oid": "6a1e80b6fce4820216e337fd"
+  },
+  "username": "A",
+  "email": "a@gmail.com",
+  "password": "$2b$10$djmdCsCXvZ6I6cs0rGjR8eYBYNAQlXOKGBG1WKDdTznE7S1CmUz72",
+  "role": "user"
+},
+{
+  "_id": {
+    "$oid": "6a1f00000000000000000000"
+  },
+  "username": "admin",
+  "email": "admin@mfu.ac.th",
+  "password": "$2b$10$RwFtHtc8T6xpyGm5CWOrhe3KZQtwO1fCmISA2VUQDmric01dncftm",
+  "role": "admin"
+}]

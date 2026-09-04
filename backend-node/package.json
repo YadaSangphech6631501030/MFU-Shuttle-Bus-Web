@@ -1,0 +1,28 @@
+{
+  "name": "shuttle_bus_backend",
+  "version": "1.0.0",
+  "description": "",
+  "main": "app.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "body-parser": "^2.2.2",
+    "cors": "^2.8.6",
+    "express": "^5.2.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongodb": "^7.1.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YadaSangphech6631501030/shuttle_bus_backend.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YadaSangphech6631501030/shuttle_bus_backend/issues"
+  },
+  "homepage": "https://github.com/YadaSangphech6631501030/shuttle_bus_backend#readme"
+}

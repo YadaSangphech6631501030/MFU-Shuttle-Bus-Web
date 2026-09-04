@@ -1,0 +1,9 @@
+node_modules
+runtime
+npm-debug.log*
+.env
+.DS_Store
+*.log
+/yolov8s.pt
+__pycache__
+*.pyc
