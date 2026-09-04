@@ -4,9 +4,9 @@ function numberFromEnv(name, fallback) {
 }
 
 module.exports = {
-  PORT: numberFromEnv("PORT", 5001),
-  MONGO_URI: process.env.MONGO_URI || "mongodb://localhost:27017/",
-  DB_NAME: process.env.DB_NAME || "shuttlebus_system",
+  PORT: numberFromEnv("PORT", 5101),
+  MONGO_URI: process.env.MONGO_URI || "mongodb://localhost:27018/",
+  DB_NAME: process.env.DB_NAME || "shuttlebus_web_system",
 
   SECRET_KEY: process.env.SECRET_KEY || "super_secret_key_123",
 

@@ -1,6 +1,6 @@
 import type { AdminUserPayload, Bus, DetectorStatus, LoginResponse, Report, Station, User } from '../types';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5101';
 const TOKEN_KEY = 'mfu_admin_token';
 const ROLE_KEY = 'mfu_admin_role';
 

@@ -16,7 +16,7 @@ def parse_args():
     parser.add_argument("--station-id", required=True)
     parser.add_argument("--camera-url", required=True)
     parser.add_argument("--mongo-uri", default=os.environ.get("MONGO_URI", "mongodb://localhost:27017/"))
-    parser.add_argument("--db-name", default=os.environ.get("DB_NAME", "shuttlebus_system"))
+    parser.add_argument("--db-name", default=os.environ.get("DB_NAME", "shuttlebus_web_system"))
     parser.add_argument("--model", default=os.path.join(os.path.dirname(__file__), "yolov8s.pt"))
     parser.add_argument("--frame-dir", default=os.path.join(os.path.dirname(__file__), "..", "runtime", "frames"))
     parser.add_argument("--save-interval", type=float, default=5.0)

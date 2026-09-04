@@ -2,7 +2,7 @@ FROM node:20-alpine AS build
 
 WORKDIR /app
 
-ARG VITE_API_BASE_URL=http://localhost:5001
+ARG VITE_API_BASE_URL=http://localhost:5101
 ARG VITE_GOOGLE_MAPS_API_KEY=
 
 ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
