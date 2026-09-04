@@ -1,12 +1,12 @@
 # MFU Shuttle Bus
 
-ระบบ Shuttle Bus สำหรับมหาวิทยาลัย ประกอบด้วย Backend API, หน้า Admin Web และแอป Flutter สำหรับผู้ใช้งาน
+ระบบ Shuttle Bus สำหรับมหาวิทยาลัย ประกอบด้วย Backend API, หน้า Admin Web และ User Web App ที่ build จาก Flutter Web
 
 ## Project Structure
 
 - `backend-node/` - Backend API ด้วย Node.js, Express และ MongoDB
 - `admin-web/` - หน้าเว็บผู้ดูแลระบบด้วย Vue 3 และ Vite
-- `frontend-vue/` - แอป Flutter สำหรับผู้ใช้งาน
+- `frontend-vue/` - User Web App ด้วย Flutter Web โดยคง UX/UI แบบ mobile app เดิม
 
 ## Main Features
 
@@ -21,7 +21,7 @@
 
 - Node.js และ npm
 - MongoDB
-- Flutter SDK
+- Flutter SDK พร้อม Web support
 - Google Maps API key สำหรับหน้าแผนที่
 - Python 3 ถ้าต้องใช้ detector script
 
@@ -73,31 +73,59 @@ npm run build
 npm run preview
 ```
 
-## Flutter App Setup
+## User Web App Setup
 
-โฟลเดอร์ `frontend-vue/` เป็น Flutter app
+โฟลเดอร์ `frontend-vue/` เป็น Flutter Web สำหรับผู้ใช้งาน โดยยังคง layout และ UX/UI แบบ mobile app เดิมเมื่อเปิดบน browser
 
 ```bash
 cd frontend-vue
 flutter pub get
-flutter run
+flutter config --enable-web
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:5001
 ```
 
-Backend URL ของแอปอยู่ที่ `frontend-vue/lib/services/api_service.dart`
+หลังรันแล้ว user web app จะเปิดใน Chrome โดยเชื่อม Backend ที่
 
-```dart
-static const String baseUrl = "http://localhost:5001";
+```text
+http://localhost:5001
 ```
 
-ถ้ารันบน Android emulator และ backend อยู่บนเครื่องเดียวกัน อาจต้องเปลี่ยน URL เป็น `http://10.0.2.2:5001` แทน `localhost`
+ถ้าไม่ส่ง `--dart-define=API_BASE_URL=...` ระบบจะใช้ค่าเริ่มต้นสำหรับเว็บเป็น `http://localhost:5001`
 
-สำหรับ iOS Google Maps ให้สร้างไฟล์ config จากตัวอย่าง
+คำสั่ง build สำหรับ deploy เป็น static web
 
 ```bash
-cp ios/Flutter/GoogleMaps.xcconfig.example ios/Flutter/GoogleMaps.xcconfig
+cd frontend-vue
+flutter build web --release --dart-define=API_BASE_URL=http://localhost:5001
 ```
 
-แล้วใส่ Google Maps API key ของโปรเจกต์
+ไฟล์ที่ build แล้วจะอยู่ที่ `frontend-vue/build/web/`
+
+## Docker Setup
+
+รันทั้ง Backend, Admin Web และ User Web App ด้วย Docker Compose
+
+```bash
+docker compose --profile flutter-web up --build
+```
+
+URL สำหรับเข้าใช้งาน
+
+- Backend API: `http://localhost:5001`
+- Admin Web: `http://localhost:8080`
+- User Web App: `http://localhost:8081`
+
+ค่า env ที่ใช้กับ User Web App ตอน build Docker
+
+```env
+FLUTTER_API_BASE_URL=http://localhost:5001
+```
+
+ตัวอย่างรันพร้อมกำหนด API URL
+
+```bash
+FLUTTER_API_BASE_URL=http://localhost:5001 docker compose --profile flutter-web up --build
+```
 
 ## API Overview
 
@@ -111,8 +139,8 @@ Backend แบ่ง route หลักตามนี้
 
 ## Development Notes
 
-- ควรรัน MongoDB และ backend ก่อนเปิด Admin Web หรือ Flutter app
-- ถ้าทดสอบบนมือถือจริง ให้เปลี่ยน API URL จาก `localhost` เป็น IP เครื่องที่รัน backend
+- ควรรัน MongoDB และ backend ก่อนเปิด Admin Web หรือ User Web App
+- ถ้าทดสอบจากเครื่องอื่นในวง LAN ให้เปลี่ยน API URL จาก `localhost` เป็น IP เครื่องที่รัน backend
 - ถ้ารันด้วย Docker ให้ดูรายละเอียดใน `docs/DOCKER.md`
 - อย่า commit ไฟล์ local config ที่มี key จริง เช่น `admin-web/.env` หรือ `frontend-vue/ios/Flutter/GoogleMaps.xcconfig`
 - ไฟล์ build/cache เช่น `node_modules/`, `.dart_tool/` และ `build/` ไม่ควรนำเข้า git

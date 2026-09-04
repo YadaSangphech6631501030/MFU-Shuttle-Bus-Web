@@ -1,16 +1,39 @@
-# shuttle_bus_fronted
+# MFU Shuttle Bus User Web App
 
-A new Flutter project.
+Flutter Web สำหรับผู้ใช้งานระบบ MFU Shuttle Bus โดยคง UX/UI แบบ mobile app เดิมไว้เมื่อเปิดบน browser
 
-## Getting Started
+## Requirements
 
-This project is a starting point for a Flutter application.
+- Flutter SDK
+- Chrome หรือ browser สำหรับทดสอบเว็บ
+- Backend API รันอยู่ที่ `http://localhost:5001` หรือ URL ที่กำหนดเอง
 
-A few resources to get you started if this is your first Flutter project:
+## Run Locally
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
+```bash
+flutter config --enable-web
+flutter pub get
+flutter run -d chrome --dart-define=API_BASE_URL=http://localhost:5001
+```
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+ถ้าไม่ส่ง `API_BASE_URL` แอปจะใช้ค่าเริ่มต้นสำหรับเว็บเป็น `http://localhost:5001`
+
+## Build Web
+
+```bash
+flutter build web --release --dart-define=API_BASE_URL=http://localhost:5001
+```
+
+ผลลัพธ์จะอยู่ที่ `build/web/` และสามารถนำไปเสิร์ฟด้วย nginx หรือ static hosting ได้
+
+## Docker
+
+```bash
+docker build \
+  --build-arg API_BASE_URL=http://localhost:5001 \
+  -t mfu-shuttle-bus-user-web .
+
+docker run --rm -p 8081:80 mfu-shuttle-bus-user-web
+```
+
+เปิดใช้งานที่ `http://localhost:8081`
