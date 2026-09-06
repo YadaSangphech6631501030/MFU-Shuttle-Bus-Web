@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type Station } from './services/api';
 import busUrl from '../assets/gemcar_right.png';
@@ -6,8 +7,13 @@ import busIconUrl from '../assets/bus.png';
 import busStopUrl from '../assets/bus_stop_2.png';
 import thaiFlagUrl from '../assets/thai_flag.png';
 import englishFlagUrl from '../assets/eng_flag.png';
+import TransitPage from './pages/TransitPage.vue';
+import FavoritesPage from './pages/FavoritesPage.vue';
+import FeedbackPage from './pages/FeedbackPage.vue';
+import SettingsPage from './pages/SettingsPage.vue';
+import LanguagePage from './pages/LanguagePage.vue';
+import type { Lang } from './types';
 
-type Lang = 'th' | 'en';
 type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language';
 type Line = 'line1' | 'line2';
 type GoogleMap = any;
@@ -518,12 +524,16 @@ watch([selectedLine, stations, buses], renderGoogleMap, { deep: true });
       <div class="line-selector"><button :class="{ active: selectedLine === 'line1' }" type="button" @click.stop="selectedLine = 'line1'"><img :src="busIconUrl" alt="" />{{ t.line1 }}</button><button :class="{ 'line-two-active': selectedLine === 'line2' }" type="button" @click.stop="selectedLine = 'line2'"><img :src="busIconUrl" alt="" />{{ t.line2 }}</button></div>
     </section>
 
-    <section v-else-if="page === 'transit'" class="screen page-screen"><div v-if="isLoading" class="loading-state">{{ t.loading }}</div><article v-for="line in (['line1', 'line2'] as Line[])" :key="line" class="line-section" :class="line"><button class="line-section-head" type="button" @click="expandedLines[line] = !expandedLines[line]"><span class="line-circle"><img :src="busIconUrl" alt="" /></span><span><strong>{{ line === 'line1' ? t.line1 : t.line2 }}</strong><small>{{ line === 'line1' ? t.mainRoute : t.medicalRoute }} · {{ lineStations(line).length }} {{ t.stations }}</small></span><b>{{ expandedLines[line] ? '⌃' : '⌄' }}</b></button><div v-if="expandedLines[line]" class="line-section-body"><div class="list-search"><span>⌕</span><input v-model="transitSearch[line]" :placeholder="t.findStation" /></div><p v-if="!filteredLineStations(line).length" class="empty-state">{{ t.noStations }}</p><button v-for="station in filteredLineStations(line)" :key="station.id" class="station-list-row" type="button" @click="selectTransitStation(station)"><span class="station-dot">●</span><strong>{{ stationName(station) }}</strong><span>›</span></button></div></article></section>
-
-    <section v-else-if="page === 'favorites'" class="screen page-screen favorites-page"><button class="add-favorite" type="button" @click="showStationPicker = true"><span>+</span><strong>{{ t.addNew }}</strong><small>{{ t.saveFavorite }}</small></button><p v-if="!favoriteStations.length" class="empty-state large-empty">{{ t.noFavorites }}</p><div v-else class="favorite-list"><article v-for="station in favoriteStations" :key="station.id" class="favorite-row"><span class="favorite-icon">♥</span><strong>{{ stationName(station) }}</strong><button type="button" :aria-label="t.remove" @click="askRemoveFavorite(station)">⌫</button></article></div></section>
-    <section v-else-if="page === 'report'" class="screen page-screen feedback-page"><p class="screen-caption">{{ t.feedback }}</p><div class="feedback-grid"><button type="button" @click="openFeedback"><span class="feedback-icon red">♥</span><strong>{{ t.feedback }}</strong></button></div></section>
-    <section v-else-if="page === 'settings'" class="screen page-screen settings-page"><p class="settings-section">{{ t.transitSection }}</p><button class="setting-row" type="button" @click="openPage('transit')"><span class="setting-icon">▣</span><strong>{{ t.transit }}</strong><b>›</b></button><button class="setting-row" type="button" @click="openPage('favorites')"><span class="setting-icon">♡</span><strong>{{ t.favorites }}</strong><b>›</b></button><p class="settings-section">{{ t.supportSection }}</p><button class="setting-row" type="button" @click="openPage('report')"><span class="setting-icon">?</span><strong>{{ t.report }}</strong><b>›</b></button><button class="setting-row" type="button" @click="openPage('language')"><span class="setting-icon">文</span><strong>{{ t.language }}</strong><span class="setting-value">{{ lang === 'th' ? t.languageThai : t.languageEnglish }}</span><b>›</b></button></section>
-    <section v-else-if="page === 'language'" class="screen page-screen language-page"><button class="language-option" :class="{ selected: lang === 'en' }" type="button" @click="setLanguage('en'); goHome()"><span>{{ t.languageEnglish }}</span><b v-if="lang === 'en'">✓</b></button><button class="language-option" :class="{ selected: lang === 'th' }" type="button" @click="setLanguage('th'); goHome()"><span>{{ t.languageThai }}</span><b v-if="lang === 'th'">✓</b></button></section>
+    <!-- Transit page: browse shuttle bus lines and stations. -->
+    <TransitPage v-else-if="page === 'transit'" :t="t" :bus-icon-url="busIconUrl" :is-loading="isLoading" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
+    <!-- Favorites page: manage saved stations. -->
+    <FavoritesPage v-else-if="page === 'favorites'" :t="t" :favorite-stations="favoriteStations" :station-name="stationName" @add="showStationPicker = true" @remove="askRemoveFavorite" />
+    <!-- Feedback page: open the feedback rating form. -->
+    <FeedbackPage v-else-if="page === 'report'" :t="t" @open="openFeedback" />
+    <!-- Settings page: navigate to transit, favorites, feedback, and language. -->
+    <SettingsPage v-else-if="page === 'settings'" :t="t" :language-label="lang === 'th' ? t.languageThai : t.languageEnglish" @open="openPage" />
+    <!-- Language page: choose Thai or English. -->
+    <LanguagePage v-else-if="page === 'language'" :t="t" :lang="lang" @select="(nextLang) => { setLanguage(nextLang); goHome(); }" />
     <div v-if="showStationPicker" class="modal-backdrop" @click.self="showStationPicker = false">
     <section class="picker-modal"><div class="modal-head"><h2>{{ t.searchStation }}</h2><button type="button" @click="showStationPicker = false">×</button></div><div class="list-search"><span>⌕</span><input v-model="favoriteSearch" autofocus :placeholder="t.findStation" /></div><div class="picker-list"><button v-for="station in favoriteMatches" :key="station.id" type="button" @click="toggleFavorite(station.id); showStationPicker = false"><span>{{ stationName(station) }}</span><b>{{ favoriteIds.includes(station.id) ? '♥' : '+' }}</b></button><p v-if="!favoriteMatches.length" class="empty-state">{{ t.noStations }}</p></div></section></div>
     <div v-if="confirmStation" class="modal-backdrop" @click.self="confirmStation = null"><section class="confirm-modal"><h2>{{ t.remove }}</h2><p>{{ t.confirmRemove }}</p><strong>{{ stationName(confirmStation) }}</strong><div class="modal-actions"><button class="secondary-btn" type="button" @click="confirmStation = null">{{ t.cancel }}</button><button class="danger-btn" type="button" @click="confirmRemoveFavorite">{{ t.remove }}</button></div></section></div>
