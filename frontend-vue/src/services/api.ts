@@ -9,6 +9,15 @@ export type Station = {
   status?: 'LOW' | 'MEDIUM' | 'HIGH';
 };
 
+export type ShuttleRoute = {
+  id: string;
+  name: string;
+  nameTH: string;
+  color: string;
+  enabled: boolean;
+  geometry: { type: 'LineString'; coordinates: [number, number][] };
+};
+
 export type Bus = {
   _id?: string;
   id?: string;
@@ -109,8 +118,12 @@ export const api = {
     });
   },
 
-  getStations(line: 'line1' | 'line2') {
-    return request<Station[]>(`/station/${line}`);
+  getRoutes() {
+    return request<ShuttleRoute[]>('/api/routes');
+  },
+
+  getStations(line: string) {
+    return request<Station[]>(`/station/${encodeURIComponent(line)}`);
   },
 
   getBuses() {

@@ -1,4 +1,4 @@
-import type { AdminUserPayload, Bus, DetectorStatus, LoginResponse, Report, Station, User } from '../types';
+import type { AdminUserPayload, Bus, DetectorStatus, LoginResponse, Report, Station, User, ShuttleRoute } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5101';
 const TOKEN_KEY = 'mfu_admin_token';
@@ -59,6 +59,19 @@ async function requestBlob(path: string, options: RequestOptions = {}) {
 }
 
 export const api = {
+  getRoutes() {
+    return request<ShuttleRoute[]>('/api/routes/admin', { auth: true });
+  },
+  deleteRoute(id: string, revision: number) {
+    return request<{ message: string; id: string }>(`/api/routes/${encodeURIComponent(id)}`, {
+      method: 'DELETE', auth: true, body: JSON.stringify({ revision }),
+    });
+  },
+  saveRoute(route: ShuttleRoute) {
+    return request<ShuttleRoute>(route.revision ? `/api/routes/${encodeURIComponent(route.id)}` : '/api/routes', {
+      method: route.revision ? 'PUT' : 'POST', auth: true, body: JSON.stringify(route),
+    });
+  },
   baseUrl: API_BASE_URL,
 
   get token() {
@@ -83,6 +96,13 @@ export const api = {
     localStorage.setItem(TOKEN_KEY, result.token);
     localStorage.setItem(ROLE_KEY, result.role);
     return result;
+  },
+
+  registerAdmin(username: string, email: string, password: string) {
+    return request<{ message: string }>('/auth/register-admin', {
+      method: 'POST',
+      body: JSON.stringify({ username, email, password }),
+    });
   },
 
   getStations() {

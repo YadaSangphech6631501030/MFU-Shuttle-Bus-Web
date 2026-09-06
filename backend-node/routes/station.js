@@ -5,7 +5,6 @@ const { getDB } = require("../db");
 const tokenRequired = require("../middleware/jwt");
 const adminOnly = require("../middleware/admin");
 
-const allowedLines = ["line1", "line2"];
 const allowedStatuses = ["LOW", "MEDIUM", "HIGH"];
 
 function firstText(source, keys) {
@@ -46,7 +45,7 @@ function publicStationFrom(station) {
   };
 }
 
-function normalizeStationBody(body, { partial = false } = {}) {
+async function normalizeStationBody(body, { partial = false } = {}) {
   const station = {};
 
   if (!partial || body.id !== undefined) {
@@ -79,10 +78,12 @@ function normalizeStationBody(body, { partial = false } = {}) {
 
   if (!partial || body.lines !== undefined) {
     const lines = Array.isArray(body.lines) ? body.lines : [];
-    station.lines = lines.filter((line) => allowedLines.includes(line));
-    if (station.lines.length === 0) {
+    if (lines.length === 0 || lines.length > 100 || !lines.every(line => typeof line === 'string')) {
       return { error: "Select at least one line" };
     }
+    const known = await getDB().collection('routes').find({ id: { $in: lines }, deletedAt: { $exists: false } }, { projection: { id: 1 } }).toArray();
+    if (lines.some(line => !known.some(route => route.id === line))) return { error: 'Unknown line. Create the route first.' };
+    station.lines = [...new Set(lines)];
   }
 
   if (body.waiting !== undefined) {
@@ -151,7 +152,7 @@ router.get("/admin/all", tokenRequired, adminOnly, async (req, res) => {
 
 router.post("/admin", tokenRequired, adminOnly, async (req, res) => {
   try {
-    const parsed = normalizeStationBody(req.body);
+    const parsed = await normalizeStationBody(req.body);
     if (parsed.error) return res.status(400).json({ error: parsed.error });
 
     const db = getDB();
@@ -177,7 +178,7 @@ router.post("/admin", tokenRequired, adminOnly, async (req, res) => {
 
 router.put("/admin/:id", tokenRequired, adminOnly, async (req, res) => {
   try {
-    const parsed = normalizeStationBody(req.body, { partial: true });
+    const parsed = await normalizeStationBody(req.body, { partial: true });
     if (parsed.error) return res.status(400).json({ error: parsed.error });
 
     const db = getDB();

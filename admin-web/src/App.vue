@@ -6,12 +6,13 @@ import DashboardPage from './page/Dashboard.vue';
 import ReportsPage from './page/Reports.vue';
 import StationCCTVPage from './page/StationCCTV.vue';
 import StationsPage from './page/Stations.vue';
+import RoutesPage from './page/Routes.vue';
 import UsersPage from './page/Users.vue';
-import type { AdminUserPayload, Bus, CrowdThresholds, DetectorStatus, Report, Station, User } from './types';
+import type { AdminUserPayload, Bus, CrowdThresholds, DetectorStatus, Report, Station, User, ShuttleRoute } from './types';
 import mfuLogoUrl from './assets/mfu_logo.png';
 
 type Lang = 'en' | 'th';
-type TabKey = 'dashboard' | 'stations' | 'cctv' | 'buses' | 'reports' | 'users';
+type TabKey = 'dashboard' | 'stations' | 'routes' | 'cctv' | 'buses' | 'reports' | 'users';
 type LatLng = { lat: number; lng: number };
 type CameraPreviewKind = 'none' | 'rtsp' | 'image' | 'video' | 'link';
 type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
@@ -115,12 +116,14 @@ const lang = ref<Lang>(savedLanguage === 'th' ? 'th' : 'en');
 const tabs: Array<{ key: TabKey }> = [
   { key: 'dashboard' },
   { key: 'stations' },
+  { key: 'routes' },
   { key: 'cctv' },
   { key: 'buses' },
   { key: 'reports' },
   { key: 'users' },
 ];
 const tabIcons: Record<TabKey, NavIcon> = {
+  routes: { paths: ['M5 5h10a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h10'], circles: [{ cx: 5, cy: 5, r: 2 }, { cx: 19, cy: 21, r: 2 }] },
   dashboard: {
     rects: [
       { x: 3, y: 3, width: 7, height: 7, rx: 1.5 },
@@ -176,6 +179,7 @@ const dictionary = {
       dashboard: 'Dashboard',
       crowd: 'Shuttle Bus Monitor',
       stations: 'Station Setting',
+      routes: 'Routes',
       cctv: 'Station CCTV',
       buses: 'Buses',
       reports: 'Reports',
@@ -189,6 +193,13 @@ const dictionary = {
     passwordPlaceholder: 'password',
     signIn: 'Sign in',
     signingIn: 'Signing in...',
+    registerAdmin: 'Register as admin',
+    registering: 'Creating account...',
+    registrationEmail: 'Email',
+    confirmPassword: 'Confirm password',
+    passwordMismatch: 'Passwords do not match.',
+    registrationSuccess: 'Admin account created. Please sign in.',
+    backToLogin: 'Back to sign in',
     logout: 'Log out',
     profileInformation: 'Profile Information',
     signedInUser: 'Admin user',
@@ -356,6 +367,7 @@ const dictionary = {
       dashboard: 'ภาพรวม',
       crowd: 'Shuttle Bus Monitor',
       stations: 'Station Setting',
+      routes: 'เส้นทางรถ',
       cctv: 'Station CCTV',
       buses: 'รถทั้งหมด',
       reports: 'รายงาน',
@@ -369,6 +381,13 @@ const dictionary = {
     passwordPlaceholder: 'รหัสผ่าน',
     signIn: 'เข้าสู่ระบบ',
     signingIn: 'กำลังเข้าสู่ระบบ...',
+    registerAdmin: 'สมัครบัญชีแอดมิน',
+    registering: 'กำลังสร้างบัญชี...',
+    registrationEmail: 'อีเมล',
+    confirmPassword: 'ยืนยันรหัสผ่าน',
+    passwordMismatch: 'รหัสผ่านไม่ตรงกัน',
+    registrationSuccess: 'สร้างบัญชีแอดมินเรียบร้อยแล้ว กรุณาเข้าสู่ระบบ',
+    backToLogin: 'กลับไปเข้าสู่ระบบ',
     logout: 'ออกจากระบบ',
     profileInformation: 'ข้อมูลโปรไฟล์',
     signedInUser: 'ผู้ดูแลระบบ',
@@ -552,7 +571,41 @@ const loginForm = reactive({
   password: '',
 });
 
+const isRegistering = ref(false);
+const registrationNotice = ref('');
+const registerForm = reactive({ username: '', email: '', password: '', confirmPassword: '' });
+
+function toggleRegistration() {
+  isRegistering.value = !isRegistering.value;
+  error.value = '';
+  registrationNotice.value = '';
+  registerForm.password = '';
+  registerForm.confirmPassword = '';
+  loginForm.password = '';
+}
+
+async function registerAdmin() {
+  if (loading.value) return;
+  await withLoading(async () => {
+    if (registerForm.password !== registerForm.confirmPassword) {
+      throw new Error(text.value.passwordMismatch);
+    }
+    const username = registerForm.username.trim();
+    await api.registerAdmin(username, registerForm.email.trim(), registerForm.password);
+    loginForm.username = username;
+    loginForm.password = '';
+    Object.assign(registerForm, { username: '', email: '', password: '', confirmPassword: '' });
+    isRegistering.value = false;
+    registrationNotice.value = text.value.registrationSuccess;
+  });
+}
+
 const stations = ref<Station[]>([]);
+const routes = ref<ShuttleRoute[]>([]);
+const routeDirty = ref(false);
+function routeSaved(route: ShuttleRoute) {
+  routes.value = [...routes.value.filter(item => item.id !== route.id), route].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+}
 const buses = ref<Bus[]>([]);
 const reports = ref<Report[]>([]);
 const users = ref<User[]>([]);
@@ -867,6 +920,7 @@ function toggleLanguage() {
 }
 
 function setActiveTab(tab: TabKey) {
+  if (tab !== activeTab.value && routeDirty.value && !window.confirm(lang.value === 'th' ? 'ทิ้งการแก้ไขเส้นทางที่ยังไม่ได้บันทึกหรือไม่?' : 'Discard unsaved route changes?')) return;
   activeTab.value = tab;
   isAlertMenuOpen.value = false;
   isUserMenuOpen.value = false;
@@ -1326,14 +1380,16 @@ async function withLoading(task: () => Promise<void>) {
 
 async function loadData() {
   await withLoading(async () => {
-    const [stationData, busData, reportData, userData] = await Promise.all([
+    const [stationData, busData, reportData, userData, routeData] = await Promise.all([
       api.getStations(),
       api.getBuses(),
       api.getReports(),
       api.getUsers(),
+      api.getRoutes(),
     ]);
 
     stations.value = stationData;
+    routes.value = routeData;
     syncSelectedCameraStation(stationData);
     buses.value = busData;
     reports.value = reportData;
@@ -1398,7 +1454,7 @@ async function saveStation() {
       lng: Number(stationForm.lng),
       waiting: 0,
       status: 'LOW',
-      lines: stationForm.lines.length ? stationForm.lines : ['line1'],
+      lines: stationForm.lines,
       detectionRoi: parseRoiText(),
     };
     const confirmTemplate = editingStationKey.value ? text.value.editStationConfirm : text.value.addStationConfirm;
@@ -1576,7 +1632,7 @@ watch(selectedCameraStationId, () => {
       <h1>MFU Shuttle Bus</h1>
       <p class="muted">{{ text.loginSubtitle }}</p>
 
-      <form class="login-form" @submit.prevent="login">
+      <form v-if="!isRegistering" class="login-form" @submit.prevent="login">
         <label>
           {{ text.username }}
           <input v-model="loginForm.username" required autocomplete="username" :placeholder="text.usernamePlaceholder" />
@@ -1590,7 +1646,36 @@ watch(selectedCameraStationId, () => {
         </button>
       </form>
 
-      <p v-if="error" class="error-text">{{ error }}</p>
+      <form v-else class="login-form" @submit.prevent="registerAdmin">
+        <h2 class="registration-title">{{ text.registerAdmin }}</h2>
+        <label>
+          {{ text.username }}
+          <input v-model="registerForm.username" required maxlength="80" autocomplete="username" :placeholder="text.usernamePlaceholder" :disabled="loading" />
+        </label>
+        <label>
+          {{ text.registrationEmail }}
+          <input v-model="registerForm.email" required type="email" maxlength="254" autocomplete="email" placeholder="name@mfu.ac.th" :disabled="loading" />
+        </label>
+        <label>
+          {{ text.password }}
+          <input v-model="registerForm.password" required type="password" minlength="6" maxlength="72" autocomplete="new-password" :placeholder="text.passwordPlaceholder" :disabled="loading" />
+        </label>
+        <label>
+          {{ text.confirmPassword }}
+          <input v-model="registerForm.confirmPassword" required type="password" minlength="6" maxlength="72" autocomplete="new-password" :placeholder="text.confirmPassword" :disabled="loading" />
+        </label>
+        <button class="primary-btn" type="submit" :disabled="loading">
+          {{ loading ? text.registering : text.registerAdmin }}
+        </button>
+      </form>
+
+      <p v-if="error" class="error-text" role="alert">{{ error }}</p>
+      <p v-if="registrationNotice" class="registration-notice" role="status">{{ registrationNotice }}</p>
+      <div class="login-register-footer">
+        <button class="login-register-link" type="button" :disabled="loading" @click="toggleRegistration">
+          {{ isRegistering ? text.backToLogin : text.registerAdmin }}
+        </button>
+      </div>
       <p class="api-note">API: {{ api.baseUrl }}</p>
     </section>
   </main>
@@ -1764,6 +1849,7 @@ watch(selectedCameraStationId, () => {
         :station-map-loading="stationMapLoading"
         :station-roi-text="stationRoiText"
         :stations="stations"
+        :routes="routes"
         :text="text"
         @delete-station="deleteStation"
         @edit-station="editStation"
@@ -1772,6 +1858,17 @@ watch(selectedCameraStationId, () => {
         @station-map-ready="setStationMapElement"
         @update-station-roi-text="stationRoiText = $event"
         @use-current-location="useCurrentLocation"
+      />
+
+      <RoutesPage
+        v-if="activeTab === 'routes'"
+        :routes="routes"
+        :stations="stations"
+        :lang="lang"
+        :load-maps="loadGoogleMaps"
+        @saved="routeSaved"
+        @reloaded="routes = $event"
+        @dirty="routeDirty = $event"
       />
 
       <StationCCTVPage
