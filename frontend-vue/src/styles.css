@@ -88,6 +88,8 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .line-selector button { min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 2px solid #e5e5e5; border-radius: 22px; background: #fff; color: #202124; font-size: 18px; font-weight: 700; }
 .line-selector button.active { border-color: #d9c48d; }
 .line-selector button.line-two-active { border-color: #777; }
+.line-selector { max-height: 38vh; overflow-y: auto; }
+.line-selector button { min-width: 0; overflow-wrap: anywhere; padding: 8px; }
 .line-selector img { width: 30px; height: 30px; object-fit: contain; }
 .line-selector button:nth-child(2) img { filter: grayscale(1); }
 .station-sheet-backdrop { position: absolute; z-index: 12; inset: 0; background: rgba(0, 0, 0, .52); }

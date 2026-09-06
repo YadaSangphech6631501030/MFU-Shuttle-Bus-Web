@@ -4,6 +4,8 @@
   "description": "",
   "main": "app.js",
   "scripts": {
+    "test:routes": "node --test test/routes.test.js",
+    "seed:routes": "node seed/seed_routes.js",
     "test": "echo \"Error: no test specified\" && exit 1",
     "seed:admin": "node seed/seed_admin.js"
   },

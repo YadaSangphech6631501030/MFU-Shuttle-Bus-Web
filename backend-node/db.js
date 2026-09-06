@@ -8,6 +8,7 @@ let db;
 async function connectDB() {
   await client.connect();
   db = client.db(DB_NAME);
+  await require('./services/routes').initializeRoutes(db);
   console.log("✅ MongoDB connected");
 }
 

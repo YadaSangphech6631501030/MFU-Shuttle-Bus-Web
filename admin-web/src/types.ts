@@ -4,6 +4,16 @@ export type LoginResponse = {
   userId: string;
 };
 
+export type ShuttleRoute = {
+  id: string;
+  name: string;
+  nameTH: string;
+  color: string;
+  enabled: boolean;
+  geometry: { type: 'LineString'; coordinates: [number, number][] };
+  revision?: number;
+};
+
 export type Station = {
   _id?: string;
   id: string;
