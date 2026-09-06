@@ -34,6 +34,21 @@ npm install
 node app.js
 ```
 
+สร้างบัญชี Admin สำหรับการใช้งานครั้งแรก:
+
+```bash
+cd backend-node
+npm run seed:admin
+```
+
+ค่าบัญชีเริ่มต้นคือ `admin` / `12345678` หากต้องการกำหนดบัญชีเอง ให้ตั้งค่าก่อนรันคำสั่ง:
+
+```bash
+ADMIN_USERNAME=admin ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=เปลี่ยนรหัสผ่าน npm run seed:admin
+```
+
+คำสั่งนี้จะสร้างหรืออัปเดตเฉพาะผู้ใช้ชื่อนั้น และไม่ลบผู้ใช้อื่น
+
 หลังรันแล้ว API จะอยู่ที่
 
 ```text
