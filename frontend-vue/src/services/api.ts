@@ -10,10 +10,13 @@ export type Station = {
 };
 
 export type Bus = {
+  _id?: string;
   id?: string;
   busId?: string;
+  busNumber?: string;
   name?: string;
   line?: string;
+  currentStationIndex?: number;
   status?: string;
   lat?: number;
   lng?: number;

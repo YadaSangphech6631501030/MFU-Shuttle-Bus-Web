@@ -61,6 +61,7 @@ services:
       context: ./frontend-vue
       args:
         VITE_API_BASE_URL: ${USER_WEB_API_BASE_URL:-http://localhost:5101}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
     image: mfu-shuttle-bus-user-web:latest
     container_name: mfu-shuttle-web-user
     restart: unless-stopped

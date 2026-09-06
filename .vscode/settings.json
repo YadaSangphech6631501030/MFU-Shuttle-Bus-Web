@@ -1,3 +1,5 @@
 {
-    "cmake.sourceDirectory": "/Users/yada/MFU-Shuttle-Bus/frontend-vue/linux"
+  "vetur.validation.script": false,
+  "vetur.validation.template": false,
+  "vetur.validation.style": false
 }

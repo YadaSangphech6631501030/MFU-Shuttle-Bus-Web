@@ -14,16 +14,15 @@
 - Dashboard สำหรับดูภาพรวมระบบ แผนที่สถานี และ crowd alerts
 - หน้า Buses สำหรับดูและจัดการสถานะรถออนไลน์/ออฟไลน์/จำนวนรถทั้งหมด
 - แอปผู้ใช้สำหรับเลือก From/To station ดูเส้นทางรถ และบันทึกสถานีโปรด
-- ระบบรายงานปัญหาและ feedback พร้อมหน้า Reports สำหรับผู้ดูแลระบบ
+- ระบบส่ง feedback จาก User Web และหน้า Reports สำหรับผู้ดูแลระบบ
 - รองรับภาษาอังกฤษและภาษาไทยในแอปผู้ใช้และ Admin Web
 
 ## Requirements
 
-- Node.js และ npm
 - MongoDB
-- Node.js และ npm
+- Node.js 20+ และ npm
 - Google Maps API key สำหรับหน้าแผนที่
-- Python 3 ถ้าต้องใช้ detector script
+- Python 3 ถ้าต้องใช้ detector script ใน backend
 
 ## Backend Setup
 
@@ -88,7 +87,10 @@ npm run dev
 
 ```env
 VITE_API_BASE_URL=http://localhost:5101
+VITE_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 ```
+
+ต้องเปิดใช้งาน Google Maps JavaScript API และจำกัด API key ตามโดเมนที่ใช้งานจริง
 
 คำสั่งที่ใช้บ่อย
 
