@@ -42,7 +42,7 @@ http://localhost:5101
 
 ค่าหลักใน `backend-node/config.js`
 
-- `MONGO_URI` - MongoDB URI ค่าเริ่มต้นเมื่อรัน local คือ `mongodb://localhost:27018/` หรือ `mongodb://mongo:27017/` เมื่อรันผ่าน Docker Compose
+- `MONGO_URI` - MongoDB URI ค่าเริ่มต้นเมื่อรัน local คือ `mongodb://localhost:27017/` หรือ `mongodb://mongo:27017/` เมื่อรันผ่าน Docker Compose
 - `DB_NAME` - ชื่อ database ค่าเริ่มต้นของ repo นี้คือ `shuttlebus_web_system`
 - `SECRET_KEY` - secret สำหรับ JWT
 - `CAMERA_URL` - URL กล้องสำหรับ detector
@@ -115,7 +115,7 @@ URL สำหรับเข้าใช้งาน
 - Backend API: `http://localhost:5101`
 - Admin Web: `http://localhost:8180`
 - User Web App: `http://localhost:8181`
-- MongoDB ภายนอกเครื่อง: `mongodb://localhost:27018`
+- MongoDB ภายนอกเครื่อง: `mongodb://localhost:27017`
 
 ชุดนี้แยกจากโปรเจกต์ `MFU-Shuttle-Bus` เดิมด้วย database และ port ใหม่
 

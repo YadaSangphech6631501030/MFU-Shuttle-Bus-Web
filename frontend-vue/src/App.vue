@@ -150,10 +150,18 @@ const MFU_MAP_STYLES = [
   },
 ];
 
-function stationName(station: Station) { return lang.value === 'th' && station.nameTH ? station.nameTH : station.name; }
-function setLanguage(next: Lang) { lang.value = next; localStorage.setItem(LANG_KEY, next); }
-function openPage(next: Page) { page.value = next; isMenuOpen.value = false; stationDetail.value = null; }
-function goHome() { openPage('home'); }
+function stationName(station: Station) 
+  { return lang.value === 'th' && station.nameTH ? station.nameTH : station.name; }
+
+  function setLanguage(next: Lang) 
+  { lang.value = next; localStorage.setItem(LANG_KEY, next); }
+
+  function openPage(next: Page) 
+  { page.value = next; isMenuOpen.value = false; stationDetail.value = null; }
+
+  function goHome() 
+  { openPage('home'); }
+
 async function selectTransitStation(station: Station) {
   setStation('to', station);
   openPage('home');
@@ -193,23 +201,49 @@ function hideStationSuggestionsSoon() {
     showStationSuggestions.value = false;
   }, 120);
 }
-function clearStation(kind: 'from' | 'to') { if (kind === 'from') { selectedFromId.value = ''; fromQuery.value = ''; } else { selectedToId.value = ''; toQuery.value = ''; } isTripSearchCollapsed.value = false; }
-function swapStations() { [fromQuery.value, toQuery.value] = [toQuery.value, fromQuery.value]; [selectedFromId.value, selectedToId.value] = [selectedToId.value, selectedFromId.value]; }
-function persistFavorites() { localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteIds.value)); localStorage.setItem(fallbackFavoritesKey, JSON.stringify(favoriteIds.value)); }
-function toggleFavorite(id: string) { favoriteIds.value = favoriteIds.value.includes(id) ? favoriteIds.value.filter((item) => item !== id) : [...favoriteIds.value, id]; persistFavorites(); }
-function askRemoveFavorite(station: Station) { confirmStation.value = station; }
-function confirmRemoveFavorite() { if (confirmStation.value) toggleFavorite(confirmStation.value.id); confirmStation.value = null; }
+function clearStation (kind: 'from' | 'to') 
+{ if (kind === 'from') { 
+    selectedFromId.value = ''; fromQuery.value = ''; 
+        } else { 
+          selectedToId.value = ''; toQuery.value = '';
+       } isTripSearchCollapsed.value = false; 
+}
+
+function swapStations() {
+   [fromQuery.value, toQuery.value] = [toQuery.value, fromQuery.value]; 
+   [selectedFromId.value, selectedToId.value] = [selectedToId.value, selectedFromId.value]; 
+}
+
+function persistFavorites() { 
+    localStorage.setItem(FAVORITES_KEY, JSON.stringify(favoriteIds.value)); 
+    localStorage.setItem(fallbackFavoritesKey, JSON.stringify(favoriteIds.value)); 
+}
+
+function toggleFavorite(id: string) { 
+  favoriteIds.value = favoriteIds.value.includes(id) ? favoriteIds.value.filter((item) => item !== id) : [...favoriteIds.value, id]; persistFavorites(); 
+}
+
+function askRemoveFavorite(station: Station) { 
+  confirmStation.value = station; 
+}
+
+function confirmRemoveFavorite() { 
+  if (confirmStation.value) toggleFavorite(confirmStation.value.id); confirmStation.value = null; 
+}
+
 function openFeedback() {
   ratings.value = [0, 0, 0, 0, 0];
   feedbackModal.value = true;
 }
-function ratingTitle(index: number) { return t.value.ratingQuestions[index]; }
+
+function ratingTitle(index: number) { 
+return t.value.ratingQuestions[index]; }
+
 async function submitFeedback() {
   if (ratings.value.some((rating) => rating === 0)) {
     message.value = t.value.required;
     return;
   }
-
   try {
     const detail = ratings.value
       .map((rating, index) => `${ratingTitle(index)}: ${rating}/5`)
@@ -221,11 +255,34 @@ async function submitFeedback() {
     message.value = error instanceof Error ? error.message : t.value.mapLoadFailed;
   }
 }
-function lineStations(line: Line) { return stations.value.filter((station) => station.lines?.includes(line)).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); }
-function filteredLineStations(line: Line) { const query = transitSearch.value[line].trim().toLowerCase(); return lineStations(line).filter((station) => !query || stationName(station).toLowerCase().includes(query) || station.name.toLowerCase().includes(query)); }
-function busLineKey(bus: Bus): Line | null { if (bus.line === 'line1' || bus.line === '1') return 'line1'; if (bus.line === 'line2' || bus.line === '2') return 'line2'; return null; }
-function busPosition(bus: Bus, index: number) { if (typeof bus.lat === 'number' && typeof bus.lng === 'number') return { lat: bus.lat, lng: bus.lng }; const line = busLineKey(bus); if (!line) return null; const route = lineStations(line); if (!route.length) return null; const station = route[Math.min(route.length - 1, Math.max(0, bus.currentStationIndex ?? 0))]; const offset = (index % 3) * 0.000055; return { lat: station.lat + offset, lng: station.lng - offset }; }
-function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
+
+function lineStations(line: Line) { 
+  return stations.value.filter((station) => station.lines?.includes(line)).sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); 
+}
+
+function filteredLineStations(line: Line) {
+   const query = transitSearch.value[line].trim().toLowerCase(); return lineStations(line).filter((station) => !query || stationName(station).toLowerCase().includes(query) || station.name.toLowerCase().includes(query)); 
+  }
+
+function busLineKey(bus: Bus): Line | null {
+  if (bus.line === 'line1' || bus.line === '1') 
+       return 'line1'; 
+  if (bus.line === 'line2' || bus.line === '2') 
+      return 'line2'; return null; 
+  }
+
+function busPosition(bus: Bus, index: number) { 
+  if (typeof bus.lat === 'number' && typeof bus.lng === 'number') 
+      return { lat: bus.lat, lng: bus.lng }; const line = busLineKey(bus); 
+  if (!line) return null; const route = lineStations(line); 
+  if (!route.length) return null; const station = route[Math.min(route.length - 1, Math.max(0, bus.currentStationIndex ?? 0))]; const offset = (index % 3) * 0.000055; 
+      return { lat: station.lat + offset, lng: station.lng - offset }; 
+  }
+
+function distanceMeters(
+  a: { lat: number; lng: number }, 
+  b: { lat: number; lng: number }) 
+  {
   const earthRadius = 6371000;
   const dLat = (b.lat - a.lat) * Math.PI / 180;
   const dLng = (b.lng - a.lng) * Math.PI / 180;
@@ -234,6 +291,7 @@ function distanceMeters(a: { lat: number; lng: number }, b: { lat: number; lng: 
   const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
   return 2 * earthRadius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
+
 function stationArrivalMinutes(station: Station) {
   let nearest = Number.POSITIVE_INFINITY;
   buses.value.forEach((bus, index) => {
@@ -244,31 +302,48 @@ function stationArrivalMinutes(station: Station) {
   if (!Number.isFinite(nearest)) return 0;
   return Math.max(1, Math.ceil(nearest / 10 / 60));
 }
-function peopleText(value = 0) { return lang.value === 'th' ? `${value} คน` : `${value} people`; }
-function minuteText(value: number) { return lang.value === 'th' ? `${value} นาที` : `${value} min`; }
+
+function peopleText(value = 0) { 
+  return lang.value === 'th' ? `${value} คน` : `${value} people`; 
+}
+
+function minuteText(value: number) { 
+  return lang.value === 'th' ? `${value} นาที` : `${value} min`;
+ }
+
 function stationStatusLabel(status = 'LOW') {
   if (status.toUpperCase() === 'HIGH') return lang.value === 'th' ? 'หนาแน่น' : 'HIGH';
   if (status.toUpperCase() === 'MEDIUM') return lang.value === 'th' ? 'ปานกลาง' : 'MEDIUM';
   return lang.value === 'th' ? 'ปกติ' : 'LOW';
 }
+
 function stationStatusClass(status = 'LOW') {
   if (status.toUpperCase() === 'HIGH') return 'high';
   if (status.toUpperCase() === 'MEDIUM') return 'medium';
   return 'low';
 }
-function escapeHtml(value: string) { return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character] || character)); }
+
+function escapeHtml(value: string) { 
+  return value.replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' }[character] || character)); 
+}
+
 const popupIcons = {
   bus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4S4 2.5 4 6v10Z"/><path d="M6 6h12v6H6zM4 14h16"/><circle cx="7.5" cy="16.5" r="1"/><circle cx="16.5" cy="16.5" r="1"/></svg>',
   people: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 18a4 4 0 0 1 6.5 1"/></svg>',
   location: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg>',
   heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.8c0 5.2-8.8 10.2-8.8 10.2S3.2 14 3.2 8.8A4.8 4.8 0 0 1 12 6.2a4.8 4.8 0 0 1 8.8 2.6Z"/></svg>',
 };
+
 function stationPopupHtml(station: Station) {
   const statusClass = stationStatusClass(station.status);
   const isFavorite = favoriteIds.value.includes(station.id);
   return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${minuteText(stationArrivalMinutes(station))}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}">${stationStatusLabel(station.status)}</b></div></div>`;
 }
-function closeStationPopup() { if (stationOverlay) stationOverlay.setMap(null); stationOverlay = null; stationOverlayStationId = ''; stationDetail.value = null; }
+
+function closeStationPopup() { 
+  if (stationOverlay) stationOverlay.setMap(null); stationOverlay = null; stationOverlayStationId = ''; stationDetail.value = null; 
+}
+
 function toggleStationPopup(station: Station) {
   if (stationOverlayStationId === station.id) { closeStationPopup(); return; }
   closeStationPopup();
@@ -286,8 +361,19 @@ function loadGoogleMapsScript() {
   if (window.google?.maps) return Promise.resolve(); if (googleMapsPromise) return googleMapsPromise;
   googleMapsPromise = new Promise<void>((resolve, reject) => { const key = import.meta.env.VITE_GOOGLE_MAPS_API_KEY; if (!key) { reject(new Error('VITE_GOOGLE_MAPS_API_KEY is not configured')); return; } let settled = false; const fail = (text: string) => { if (settled) return; settled = true; googleMapsPromise = null; reject(new Error(text)); }; window.gm_authFailure = () => { mapError.value = 'Google Maps API key is invalid or blocked'; fail(mapError.value); }; window.initMfuUserMap = () => { settled = true; resolve(); }; const existing = document.querySelector<HTMLScriptElement>('script[data-mfu-google-maps]'); if (existing) { existing.addEventListener('load', () => window.google?.maps ? resolve() : fail('Google Maps failed to load')); return; } const script = document.createElement('script'); script.dataset.mfuGoogleMaps = 'true'; script.async = true; script.defer = true; script.src = `https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&callback=initMfuUserMap&loading=async`; script.onerror = () => fail('Google Maps failed to load'); document.head.appendChild(script); }); return googleMapsPromise;
 }
-function removeMapOverlays() { [...mapMarkers, ...mapPolylines, ...busMarkers].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; }
-async function loadRoute(line: Line) { try { const response = await fetch(new URL(`../assets/routes/polyline_${line}_mfu.geojson`, import.meta.url)); const geojson = await response.json(); const coordinates = geojson.features?.flatMap((feature: any) => feature.geometry?.coordinates || []) || geojson.geometry?.coordinates || []; return coordinates.map(([lng, lat]: number[]) => ({ lat, lng })); } catch { return lineStations(line).map(({ lat, lng }) => ({ lat, lng })); } }
+
+function removeMapOverlays() { 
+  [...mapMarkers, ...mapPolylines, ...busMarkers].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; 
+}
+
+async function loadRoute(line: Line) { 
+  try { const response = await fetch(new URL(`../assets/routes/polyline_${line}_mfu.geojson`, import.meta.url)); 
+    const geojson = await response.json(); const coordinates = geojson.features?.flatMap((feature: any) => feature.geometry?.coordinates || []) || geojson.geometry?.coordinates || []; 
+    return coordinates.map(([lng, lat]: number[]) => ({ lat, lng })); } 
+    catch { 
+      return lineStations(line).map(({ lat, lng }) => ({ lat, lng })); 
+  } 
+}
 async function renderGoogleMap() {
   if (!campusMap || !window.google?.maps || !stations.value.length || !mapElement.value) return;
   if (campusMap.getDiv?.() !== mapElement.value) return;

@@ -4,7 +4,7 @@ services:
     container_name: mfu-shuttle-web-mongo
     restart: unless-stopped
     ports:
-      - "27018:27017"
+      - "27017:27017"
     environment:
       MONGO_INITDB_DATABASE: ${DB_NAME:-shuttlebus_web_system}
     volumes:
