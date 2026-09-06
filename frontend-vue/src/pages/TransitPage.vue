@@ -1,15 +1,18 @@
 <script setup lang="ts">
 // Displays shuttle bus lines and their station lists.
-import type { Station, ShuttleRoute } from '../services/api';
+import type { Station } from '../services/api';
 
-type Line = string;
+type Line = 'line1' | 'line2';
+
+const routes: Array<{ id: Line; color: string }> = [
+  { id: 'line1', color: '#bc9945' },
+  { id: 'line2', color: '#777777' },
+];
 
 defineProps<{
   t: any;
   busIconUrl: string;
   isLoading: boolean;
-  routes: ShuttleRoute[];
-  routeName: (route: ShuttleRoute) => string;
   expandedLines: Record<Line, boolean>;
   transitSearch: Record<Line, string>;
   lineStations: (line: Line) => Station[];
@@ -18,6 +21,10 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{ select: [station: Station] }>();
+
+function routeName(route: { id: Line }, t: any) {
+  return route.id === 'line1' ? t.line1 : t.line2;
+}
 </script>
 
 <template>
@@ -26,7 +33,7 @@ const emit = defineEmits<{ select: [station: Station] }>();
     <article v-for="route in routes" :key="route.id" class="line-section" :class="route.id">
       <button class="line-section-head" type="button" @click="expandedLines[route.id] = !expandedLines[route.id]">
         <span class="line-circle" :style="{ borderColor: route.color }"><img :src="busIconUrl" alt="" /></span>
-        <span><strong>{{ routeName(route) }}</strong><small>{{ route.id }} · {{ lineStations(route.id).length }} {{ t.stations }}</small></span>
+        <span><strong>{{ routeName(route, t) }}</strong><small>{{ route.id }} · {{ lineStations(route.id).length }} {{ t.stations }}</small></span>
         <b>{{ expandedLines[route.id] ? '⌃' : '⌄' }}</b>
       </button>
       <div v-if="expandedLines[route.id]" class="line-section-body">

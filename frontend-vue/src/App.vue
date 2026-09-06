@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onMounted, ref, watch } from 'vue';
-import { api, type Bus, type Station, type ShuttleRoute } from './services/api';
+import { api, type Bus, type Station } from './services/api';
 import busUrl from '../assets/gemcar_right.png';
 import busIconUrl from '../assets/bus.png';
 import busStopUrl from '../assets/bus_stop_2.png';
@@ -15,7 +15,7 @@ import LanguagePage from './pages/LanguagePage.vue';
 import type { Lang } from './types';
 
 type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language';
-type Line = string;
+type Line = 'line1' | 'line2';
 type GoogleMap = any;
 
 declare global {
@@ -36,15 +36,13 @@ const selectedToId = ref('');
 const isTripSearchCollapsed = ref(false);
 const activeSearchField = ref<'from' | 'to'>('to');
 const stations = ref<Station[]>([]);
-const routes = ref<ShuttleRoute[]>([]);
-const routeName = (route: ShuttleRoute) => lang.value === 'th' && route.nameTH ? route.nameTH : route.name;
 const buses = ref<Bus[]>([]);
 const favoriteIds = ref<string[]>(JSON.parse(localStorage.getItem(FAVORITES_KEY) || localStorage.getItem(fallbackFavoritesKey) || '[]'));
 const isLoading = ref(false);
 const message = ref('');
 const mapError = ref('');
-const expandedLines = ref<Record<Line, boolean>>({});
-const transitSearch = ref<Record<Line, string>>({});
+const expandedLines = ref<Record<Line, boolean>>({ line1: false, line2: false });
+const transitSearch = ref<Record<Line, string>>({ line1: '', line2: '' });
 const showStationPicker = ref(false);
 const showStationSuggestions = ref(false);
 const favoriteSearch = ref('');
@@ -54,6 +52,7 @@ const feedbackModal = ref(false);
 const successModal = ref(false);
 const ratings = ref([0, 0, 0, 0, 0]);
 const mapElement = ref<HTMLElement | null>(null);
+const selectedRouteAvailable = ref(false);
 
 let campusMap: GoogleMap = null;
 let mapMarkers: any[] = [];
@@ -81,7 +80,7 @@ const dictionary = {
       saveFavorite: 'บันทึกสถานีที่คุณใช้บ่อย', noFavorites: 'ยังไม่มีสถานีโปรด',
       remove: 'ลบ', cancel: 'ยกเลิก', confirmRemove: 'ต้องการลบสถานีนี้ออกจากรายการโปรดใช่ไหม?', 
       searchStation: 'ค้นหาสถานี', noStations: 'ไม่พบสถานี', 
-      required: 'กรุณากรอกข้อมูลให้ครบถ้วน', feedback: 'ส่งข้อเสนอแนะ',
+      required: 'กรุณากรอกข้อมูลให้ครบถ้วน', feedback: 'ส่งข้อเสนอแนะ', tripSummary: 'สรุปการเดินทาง', noDirectRoute: 'ไม่มีเส้นทางรถตรงระหว่างสองสถานีนี้', minutes: 'นาที', busArrival: 'รถจะมาถึงใน', rideTime: 'เวลานั่งบนรถ', totalTime: 'รวมเวลาเดินทาง',
       success: 'สำเร็จ', successText: 'ส่งข้อเสนอแนะเรียบร้อยแล้ว', language: 'ภาษา',
       languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'การเดินทาง', supportSection: 'ช่วยเหลือ', loading: 'กำลังโหลดข้อมูล...', mapKeyMissing: 'กรุณาตั้งค่า Google Maps API key ในไฟล์ frontend-vue/.env', mapLoadFailed: 'ไม่สามารถโหลด Google Maps ได้',
       ratingQuestions: ['การบริการที่สถานี', 'สภาพรถรับส่ง', 'มารยาทและความปลอดภัยในการขับรถ', 'ความสุภาพของพนักงานขับรถ', 'ความพึงพอใจโดยรวม'], ratingHint: 'แตะดาวเพื่อให้คะแนน',
@@ -90,7 +89,7 @@ const dictionary = {
     title: 'MFU SHUTTLE BUS', home: 'Home', transit: 'MFU Transit', favorites: 'Favorite Stations', report: 'Feedback', settings: 'Settings', 
     from: 'From', to: 'To', fromStation: 'From station', toStation: 'To station', swap: 'Swap stations', close: 'Close', line1: 'Line 1', line2: 'Line 2', all: 'All', stations: 'stations',
     mainRoute: 'Main campus route', medicalRoute: 'MFU Medical Center route', findStation: 'Find station', addNew: 'Add new', saveFavorite: 'Save your favorite station', noFavorites: 'No favorite stations yet', remove: 'Delete', cancel: 'Cancel', confirmRemove: 'Remove this station from your favorite list?', searchStation: 'Search station', noStations: 'No stations found',
-    required: 'Please complete the required fields', feedback: 'Feedback', success: 'Success', successText: 'Feedback sent successfully', language: 'Language',
+    required: 'Please complete the required fields', feedback: 'Feedback', tripSummary: 'Trip summary', noDirectRoute: 'No direct bus route between these stations', minutes: 'min', busArrival: 'Bus arrives in', rideTime: 'Ride time', totalTime: 'Total travel time', success: 'Success', successText: 'Feedback sent successfully', language: 'Language',
     languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'Transit', supportSection: 'Support', loading: 'Loading...', mapKeyMissing: 'Set the Google Maps API key in frontend-vue/.env', mapLoadFailed: 'Google Maps could not be loaded', ratingQuestions: ['Station service', 'Bus condition', 'Driving manners and safety', 'Driver politeness', 'Overall satisfaction'], ratingHint: 'Tap a star to rate',
   },
 } as const;
@@ -171,7 +170,8 @@ function stationName(station: Station)
   { openPage('home'); }
 
 async function selectTransitStation(station: Station) {
-  setStation('to', station);
+  const selectionKind = !selectedFromId.value ? 'from' : !selectedToId.value ? 'to' : 'to';
+  setStation(selectionKind, station);
   openPage('home');
   await nextTick();
   await ensureHomeMap();
@@ -185,8 +185,7 @@ function searchStations(query: string, field: 'from' | 'to') {
   return visibleStations.value
     .filter((station) => station.id !== blockedId)
     .filter((station) => !clean || station.name.toLowerCase().includes(clean) || station.nameTH?.toLowerCase().includes(clean))
-    .sort((a, b) => Number(favoriteIds.value.includes(b.id)) - Number(favoriteIds.value.includes(a.id)) || stationName(a).localeCompare(stationName(b)))
-    .slice(0, 7);
+    .sort((a, b) => Number(favoriteIds.value.includes(b.id)) - Number(favoriteIds.value.includes(a.id)) || stationName(a).localeCompare(stationName(b)));
 }
 function setStation(kind: 'from' | 'to', station: Station) {
   if (kind === 'from') {
@@ -204,11 +203,16 @@ function setStation(kind: 'from' | 'to', station: Station) {
   }
 }
 
-function hideStationSuggestionsSoon() {
+function hideStationSuggestionsSoon(event?: FocusEvent) {
+  const nextElement = event?.relatedTarget as HTMLElement | null;
+  if (nextElement?.closest('.suggestions')) return;
   window.setTimeout(() => {
+    const focusedElement = document.activeElement as HTMLElement | null;
+    if (focusedElement?.closest('.trip-fields, .suggestions')) return;
     showStationSuggestions.value = false;
   }, 120);
 }
+
 function clearStation (kind: 'from' | 'to') 
 { if (kind === 'from') { 
     selectedFromId.value = ''; fromQuery.value = ''; 
@@ -269,12 +273,15 @@ function lineStations(line: Line) {
 }
 
 function filteredLineStations(line: Line) {
-   const query = (transitSearch.value[line] || '').trim().toLowerCase(); return lineStations(line).filter((station) => !query || stationName(station).toLowerCase().includes(query) || station.name.toLowerCase().includes(query));
+   const query = transitSearch.value[line].trim().toLowerCase(); return lineStations(line).filter((station) => !query || stationName(station).toLowerCase().includes(query) || station.name.toLowerCase().includes(query)); 
   }
 
 function busLineKey(bus: Bus): Line | null {
-  return routes.value.find(route => route.id === bus.line || route.id === 'line' + bus.line)?.id || null;
-}
+  if (bus.line === 'line1' || bus.line === '1') 
+       return 'line1'; 
+  if (bus.line === 'line2' || bus.line === '2') 
+      return 'line2'; return null; 
+  }
 
 function busPosition(bus: Bus, index: number) { 
   if (typeof bus.lat === 'number' && typeof bus.lng === 'number') 
@@ -298,8 +305,13 @@ function distanceMeters(
 }
 
 function stationArrivalMinutes(station: Station) {
+  return stationArrivalMinutesForLine(station);
+}
+
+function stationArrivalMinutesForLine(station: Station, line?: Line) {
   let nearest = Number.POSITIVE_INFINITY;
   buses.value.forEach((bus, index) => {
+    if (line && busLineKey(bus) !== line) return;
     const position = busPosition(bus, index);
     if (!position) return;
     nearest = Math.min(nearest, distanceMeters(position, { lat: station.lat, lng: station.lng }));
@@ -307,6 +319,17 @@ function stationArrivalMinutes(station: Station) {
   if (!Number.isFinite(nearest)) return 0;
   return Math.max(1, Math.ceil(nearest / 10 / 60));
 }
+
+const tripEstimate = computed(() => {
+  const from = stations.value.find((station) => station.id === selectedFromId.value);
+  const to = stations.value.find((station) => station.id === selectedToId.value);
+  if (!from || !to) return null;
+  const line = (from.lines || []).find((candidate) => to.lines?.includes(candidate)) as Line | undefined;
+  if (!line || !selectedRouteAvailable.value) return { available: false as const };
+  const rideMinutes = Math.max(1, Math.ceil(distanceMeters(from, to) / 8.33 / 60));
+  const arrivalMinutes = stationArrivalMinutesForLine(from, line);
+  return { available: true as const, arrivalMinutes, rideMinutes, totalMinutes: arrivalMinutes + rideMinutes };
+});
 
 function peopleText(value = 0) { 
   return lang.value === 'th' ? `${value} คน` : `${value} people`; 
@@ -371,24 +394,37 @@ function removeMapOverlays() {
   [...mapMarkers, ...mapPolylines, ...busMarkers].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; 
 }
 
-async function loadRoute(line: Line) {
-  return (routes.value.find(route => route.id === line)?.geometry.coordinates || []).map(([lng, lat]) => ({ lat, lng }));
+async function loadRoute(line: Line) { 
+  try { const response = await fetch(new URL(`../assets/routes/polyline_${line}_mfu.geojson`, import.meta.url)); 
+    const geojson = await response.json(); const coordinates = geojson.features?.flatMap((feature: any) => feature.geometry?.coordinates || []) || geojson.geometry?.coordinates || []; 
+    return coordinates.map(([lng, lat]: number[]) => ({ lat, lng })); } 
+    catch { 
+      return lineStations(line).map(({ lat, lng }) => ({ lat, lng })); 
+  } 
 }
 async function renderGoogleMap() {
-  if (!campusMap || !window.google?.maps || !mapElement.value) return;
+  if (!campusMap || !window.google?.maps || !stations.value.length || !mapElement.value) return;
   if (campusMap.getDiv?.() !== mapElement.value) return;
   const generation = ++mapRenderGeneration;
   const lineSelection = selectedLine.value;
-  const lines: readonly Line[] = lineSelection === 'all' ? routes.value.map(route => route.id) : [lineSelection];
-  const colors = Object.fromEntries(routes.value.map(route => [route.id, route.color]));
+  const lines: readonly Line[] = lineSelection === 'all' ? ['line1', 'line2'] : [lineSelection];
+  const colors: Record<Line, string> = { line1: '#bc9945', line2: '#5f6368' };
   const points: Array<{ lat: number; lng: number }> = [];
+  const selectedFrom = stations.value.find((station) => station.id === selectedFromId.value);
+  const selectedTo = stations.value.find((station) => station.id === selectedToId.value);
+  const routePaths = new Map<Line, Array<{ lat: number; lng: number }>>();
+  const selectedRouteLine = selectedFrom && selectedTo
+    ? lines.find((line) => selectedFrom.lines?.includes(line) && selectedTo.lines?.includes(line))
+    : undefined;
+  selectedRouteAvailable.value = false;
 
   removeMapOverlays();
   for (const line of lines) {
     const path = await loadRoute(line);
     if (generation !== mapRenderGeneration) return;
+    routePaths.set(line, path);
     points.push(...path);
-    if (path.length > 1) {
+    if (path.length > 1 && !selectedRouteLine) {
       mapPolylines.push(new window.google.maps.Polyline({
         path,
         geodesic: true,
@@ -401,13 +437,37 @@ async function renderGoogleMap() {
     }
   }
 
-  const stationList = stations.value.filter((station) => lineSelection === 'all' || station.lines?.includes(lineSelection));
+  const stationList = selectedFrom && selectedTo
+    ? stations.value.filter((station) => station.id === selectedFrom.id || station.id === selectedTo.id)
+    : stations.value.filter((station) => lineSelection === 'all' || station.lines?.includes(lineSelection));
   stationList.forEach((station) => { points.push({ lat: station.lat, lng: station.lng }); const marker = new window.google.maps.Marker({ position: { lat: station.lat, lng: station.lng }, map: campusMap, title: stationName(station), icon: { url: busStopUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 50) } }); marker.addListener('click', () => toggleStationPopup(station)); mapMarkers.push(marker); });
-  buses.value.filter((bus) => busLineKey(bus) && (lineSelection === 'all' || busLineKey(bus) === lineSelection)).forEach((bus, index) => { const position = busPosition(bus, index); if (!position) return; points.push(position); busMarkers.push(new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20, icon: { url: busUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } })); });
+  buses.value.filter((bus) => lineSelection === 'all' || busLineKey(bus) === lineSelection).forEach((bus, index) => { const position = busPosition(bus, index); if (!position) return; points.push(position); busMarkers.push(new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20, icon: { url: busUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } })); });
+  const selectedPath = selectedRouteLine ? routePaths.get(selectedRouteLine) : undefined;
+  if (selectedFrom && selectedTo && selectedPath && selectedPath.length > 1) {
+    const nearestPathIndex = (station: Station) => selectedPath.reduce((nearest, point, index) => distanceMeters(point, station) < distanceMeters(selectedPath[nearest], station) ? index : nearest, 0);
+    const fromIndex = nearestPathIndex(selectedFrom);
+    const toIndex = nearestPathIndex(selectedTo);
+    if (fromIndex !== toIndex) {
+      selectedRouteAvailable.value = true;
+      const startIndex = Math.min(fromIndex, toIndex);
+      const endIndex = Math.max(fromIndex, toIndex);
+      const segment = selectedPath.slice(startIndex + 1, endIndex);
+      if (fromIndex > toIndex) segment.reverse();
+      mapPolylines.push(new window.google.maps.Polyline({
+        path: [{ lat: selectedFrom.lat, lng: selectedFrom.lng }, ...segment, { lat: selectedTo.lat, lng: selectedTo.lng }],
+        geodesic: true,
+        strokeColor: '#2196f3',
+        strokeOpacity: 1,
+        strokeWeight: 6,
+        zIndex: 10,
+        map: campusMap,
+      }));
+    }
+  }
 }
 async function overviewMinimumZoom() {
-    const routePaths = await Promise.all(routes.value.map(route => loadRoute(route.id)));
-    const routePoints = routePaths.flat();
+    const routes = await Promise.all([loadRoute('line1'), loadRoute('line2')]);
+    const routePoints = routes.flat();
     const element = mapElement.value;
     if (element && routePoints.length) {
       // Web Mercator world coordinates let us fit routes without moving the camera.
@@ -446,7 +506,7 @@ async function initGoogleMap() {
       zoom: 17,
       minZoom,
       maxZoom: 18,
-
+      restriction: { latLngBounds: { north: 20.064, south: 20.0385, east: 99.904, west: 99.8875 }, strictBounds: false },
       disableDefaultUI: true,
       styles: MFU_MAP_STYLES,
       clickableIcons: false,
@@ -477,31 +537,13 @@ async function ensureHomeMap() {
   window.google?.maps?.event.trigger(campusMap, 'resize');
   await renderGoogleMap();
 }
-async function loadData() {
-  isLoading.value = true; message.value = '';
-  try {
-    const [routeList, busList] = await Promise.all([api.getRoutes(), api.getBuses().catch(() => [])]);
-    const stationLists = await Promise.all(routeList.map(route => api.getStations(route.id)));
-    const stationMap = new Map<string, Station>();
-    stationLists.flat().forEach(station => stationMap.set(station.id, station));
-    routes.value = routeList.sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-    if (selectedLine.value !== 'all' && !routeList.some(route => route.id === selectedLine.value)) selectedLine.value = 'all';
-    stations.value = [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-    buses.value = busList;
-  } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; }
-  finally { isLoading.value = false; }
-}
+async function loadData() { isLoading.value = true; message.value = ''; try { const [line1, line2, busList] = await Promise.all([api.getStations('line1'), api.getStations('line2'), api.getBuses().catch(() => [])]); const stationMap = new Map<string, Station>(); [...line1, ...line2].forEach((station) => { const old = stationMap.get(station.id); stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station); }); stations.value = [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); buses.value = busList; } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
 onMounted(async () => { await loadData(); await initGoogleMap(); });
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
-watch([selectedLine, stations, buses, routes], renderGoogleMap, { deep: true });
-watch(selectedLine, line => {
-  if (!campusMap || !window.google?.maps) return;
-  const coordinates = routes.value.filter(route => line === 'all' || route.id === line).flatMap(route => route.geometry.coordinates);
-  if (!coordinates.length) return;
-  const bounds = new window.google.maps.LatLngBounds();
-  coordinates.forEach(([lng, lat]) => bounds.extend({ lat, lng }));
-  campusMap.fitBounds(bounds, 60);
-});
+watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
+  selectedRouteAvailable.value = false;
+  void renderGoogleMap();
+}, { deep: true });
 </script>
 
 <template>
@@ -536,11 +578,12 @@ watch(selectedLine, line => {
 
   <section v-if="page === 'home'" class="screen home-screen"><div ref="mapElement" class="campus-map google-map" role="application" aria-label="MFU campus map"><div v-if="mapError" class="map-error">{{ mapError.includes('API_KEY') ? t.mapKeyMissing : t.mapLoadFailed }}</div></div>
       <div v-if="isTripSearchCollapsed" class="collapsed-trip" @click="isTripSearchCollapsed = false"><button class="menu-btn map-menu-btn" type="button" aria-label="Menu" @click.stop="isMenuOpen = true"><span></span><span></span><span></span></button><strong>{{ fromQuery }} <span>→</span> {{ toQuery }}</strong><span>⌄</span></div><div v-else class="trip-card"><button class="menu-btn map-menu-btn" type="button" aria-label="Menu" @click="isMenuOpen = true"><span></span><span></span><span></span></button><div class="trip-marker-column" aria-hidden="true"><span class="origin-marker"></span><i></i><span class="destination-marker"></span></div><div class="trip-fields"><label><span>{{ t.from }}</span><div class="input-wrap"><input v-model="fromQuery" :placeholder="t.fromStation" @focus="activeSearchField = 'from'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedFromId = ''; showStationSuggestions = true" /><button v-if="fromQuery" class="clear-input" type="button" @click="clearStation('from')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'from'" class="suggestions"><button v-for="station in fromMatches" :key="station.id" type="button" @click="setStation('from', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div><label><span>{{ t.to }}</span><div class="input-wrap"><input v-model="toQuery" :placeholder="t.toStation" @focus="activeSearchField = 'to'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedToId = ''; showStationSuggestions = true" /><button v-if="toQuery" class="clear-input" type="button" @click="clearStation('to')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'to'" class="suggestions"><button v-for="station in toMatches" :key="station.id" type="button" @click="setStation('to', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div></div><div class="trip-actions"><button v-if="selectedFromId && selectedToId" class="icon-action" type="button" @click="isTripSearchCollapsed = true">⌃</button><button class="icon-action" type="button" :disabled="!fromQuery && !toQuery" :aria-label="t.swap" @click="swapStations">⇅</button></div></div>
-      <div class="line-selector"><button v-for="route in routes" :key="route.id" :class="{ active: selectedLine === route.id }" :style="selectedLine === route.id ? { background: route.color, color: '#ffffff' } : {}" type="button" @click.stop="selectedLine = selectedLine === route.id ? 'all' : route.id"><img :src="busIconUrl" alt="" />{{ routeName(route) }}</button></div>
+      <div class="line-selector"><button :class="{ active: selectedLine === 'line1' }" type="button" @click.stop="selectedLine = 'line1'"><img :src="busIconUrl" alt="" />{{ t.line1 }}</button><button :class="{ 'line-two-active': selectedLine === 'line2' }" type="button" @click.stop="selectedLine = 'line2'"><img :src="busIconUrl" alt="" />{{ t.line2 }}</button></div>
+      <div v-if="tripEstimate && isTripSearchCollapsed" class="trip-estimate"><div class="trip-estimate-head"><strong>{{ t.tripSummary }}</strong><span>{{ fromQuery }} <b>→</b> {{ toQuery }}</span></div><template v-if="tripEstimate.available"><div class="trip-estimate-row"><span class="trip-estimate-icon material-icon">directions_bus</span><strong>{{ t.busArrival }}</strong><b>{{ tripEstimate.arrivalMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row"><span class="trip-estimate-icon material-icon">schedule</span><strong>{{ t.rideTime }}</strong><b>{{ tripEstimate.rideMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row total"><span class="trip-estimate-icon material-icon">timer</span><strong>{{ t.totalTime }}</strong><b>{{ tripEstimate.totalMinutes }} {{ t.minutes }}</b></div></template><p v-else class="trip-estimate-unavailable">{{ t.noDirectRoute }}</p></div>
     </section>
 
     <!-- Transit page: browse shuttle bus lines and stations. -->
-    <TransitPage v-else-if="page === 'transit'" :t="t" :routes="routes" :route-name="routeName" :bus-icon-url="busIconUrl" :is-loading="isLoading" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
+    <TransitPage v-else-if="page === 'transit'" :t="t" :bus-icon-url="busIconUrl" :is-loading="isLoading" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
     <!-- Favorites page: manage saved stations. -->
     <FavoritesPage v-else-if="page === 'favorites'" :t="t" :favorite-stations="favoriteStations" :station-name="stationName" @add="showStationPicker = true" @remove="askRemoveFavorite" />
     <!-- Feedback page: open the feedback rating form. -->
@@ -556,3 +599,5 @@ watch(selectedLine, line => {
     <div v-if="successModal" class="modal-backdrop" @click.self="successModal = false"><section class="success-modal"><span>✓</span><h2>{{ t.success }}</h2><p>{{ t.successText }}</p><button class="primary-btn" type="button" @click="successModal = false">{{ t.close }}</button></section></div>
   </section></main>
 </template>
+
+
