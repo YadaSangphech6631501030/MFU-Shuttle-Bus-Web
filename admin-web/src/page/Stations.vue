@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
-import type { Station } from '../types';
+import type { Station, ShuttleRoute } from '../types';
 
 const props = defineProps<{
   editingStationKey: string | null;
@@ -10,6 +10,7 @@ const props = defineProps<{
   stationMapLoading: boolean;
   stationRoiText: string;
   stations: Station[];
+  routes: ShuttleRoute[];
   text: Record<string, any>;
 }>();
 
@@ -172,8 +173,7 @@ watch(
             <p v-if="stationMapError" class="map-error">{{ stationMapError }}</p>
           </div>
           <div class="checkbox-row">
-            <label><input v-model="stationForm.lines" type="checkbox" value="line1" /> {{ text.line1 }}</label>
-            <label><input v-model="stationForm.lines" type="checkbox" value="line2" /> {{ text.line2 }}</label>
+            <label v-for="route in routes" :key="route.id"><input v-model="stationForm.lines" type="checkbox" :value="route.id" /> {{ text.language === 'TH' && route.nameTH ? route.nameTH : route.name }}</label>
           </div>
           <label>{{ text.cameraUrl }} <input v-model="stationForm.cameraUrl" placeholder="rtsp://... or https://..." /></label>
           <label>

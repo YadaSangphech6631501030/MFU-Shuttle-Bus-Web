@@ -14,16 +14,15 @@
 - Dashboard สำหรับดูภาพรวมระบบ แผนที่สถานี และ crowd alerts
 - หน้า Buses สำหรับดูและจัดการสถานะรถออนไลน์/ออฟไลน์/จำนวนรถทั้งหมด
 - แอปผู้ใช้สำหรับเลือก From/To station ดูเส้นทางรถ และบันทึกสถานีโปรด
-- ระบบรายงานปัญหาและ feedback พร้อมหน้า Reports สำหรับผู้ดูแลระบบ
+- ระบบส่ง feedback จาก User Web และหน้า Reports สำหรับผู้ดูแลระบบ
 - รองรับภาษาอังกฤษและภาษาไทยในแอปผู้ใช้และ Admin Web
 
 ## Requirements
 
-- Node.js และ npm
 - MongoDB
-- Node.js และ npm
+- Node.js 20+ และ npm
 - Google Maps API key สำหรับหน้าแผนที่
-- Python 3 ถ้าต้องใช้ detector script
+- Python 3 ถ้าต้องใช้ detector script ใน backend
 
 ## Backend Setup
 
@@ -35,6 +34,21 @@ npm install
 node app.js
 ```
 
+สร้างบัญชี Admin สำหรับการใช้งานครั้งแรก:
+
+```bash
+cd backend-node
+npm run seed:admin
+```
+
+ค่าบัญชีเริ่มต้นคือ `admin` / `12345678` หากต้องการกำหนดบัญชีเอง ให้ตั้งค่าก่อนรันคำสั่ง:
+
+```bash
+ADMIN_USERNAME=admin ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=เปลี่ยนรหัสผ่าน npm run seed:admin
+```
+
+คำสั่งนี้จะสร้างหรืออัปเดตเฉพาะผู้ใช้ชื่อนั้น และไม่ลบผู้ใช้อื่น
+
 หลังรันแล้ว API จะอยู่ที่
 
 ```text
@@ -43,7 +57,7 @@ http://localhost:5101
 
 ค่าหลักใน `backend-node/config.js`
 
-- `MONGO_URI` - MongoDB URI ค่าเริ่มต้นเมื่อรัน local คือ `mongodb://localhost:27018/` หรือ `mongodb://mongo:27017/` เมื่อรันผ่าน Docker Compose
+- `MONGO_URI` - MongoDB URI ค่าเริ่มต้นเมื่อรัน local คือ `mongodb://localhost:27017/` หรือ `mongodb://mongo:27017/` เมื่อรันผ่าน Docker Compose
 - `DB_NAME` - ชื่อ database ค่าเริ่มต้นของ repo นี้คือ `shuttlebus_web_system`
 - `SECRET_KEY` - secret สำหรับ JWT
 - `CAMERA_URL` - URL กล้องสำหรับ detector
@@ -88,7 +102,10 @@ npm run dev
 
 ```env
 VITE_API_BASE_URL=http://localhost:5101
+VITE_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
 ```
+
+ต้องเปิดใช้งาน Google Maps JavaScript API และจำกัด API key ตามโดเมนที่ใช้งานจริง
 
 คำสั่งที่ใช้บ่อย
 
@@ -113,7 +130,7 @@ URL สำหรับเข้าใช้งาน
 - Backend API: `http://localhost:5101`
 - Admin Web: `http://localhost:8180`
 - User Web App: `http://localhost:8181`
-- MongoDB ภายนอกเครื่อง: `mongodb://localhost:27018`
+- MongoDB ภายนอกเครื่อง: `mongodb://localhost:27017`
 
 ชุดนี้แยกจากโปรเจกต์ `MFU-Shuttle-Bus` เดิมด้วย database และ port ใหม่
 

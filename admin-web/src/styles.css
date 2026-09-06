@@ -77,6 +77,43 @@ button {
   box-shadow: 0 12px 28px rgba(140, 21, 21, 0.26);
 }
 
+.login-register-footer {
+  margin-top: 18px;
+  text-align: center;
+}
+
+.login-register-link {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: #949ba6;
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.login-register-link:hover,
+.login-register-link:focus-visible {
+  color: #64748b;
+  background: transparent;
+  text-decoration: underline;
+}
+
+.login-register-link:focus-visible {
+  outline: 2px solid #64748b;
+  outline-offset: 3px;
+}
+
+.registration-title {
+  margin: 0;
+  font-size: 18px;
+}
+
+.registration-notice {
+  margin: 16px 0 0;
+  color: #237442;
+  font-size: 13px;
+}
+
 .brand-mark.small {
   width: 38px;
   height: 38px;

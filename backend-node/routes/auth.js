@@ -172,11 +172,12 @@ router.get("/admin/users", tokenRequired, adminOnly, async (req, res) => {
   }
 });
 
-router.post("/admin/users", tokenRequired, adminOnly, async (req, res) => {
+async function createAdmin(req, res) {
   try {
-    const username = String(req.body.username || "").trim();
-    const email = String(req.body.email || "").trim();
-    const password = String(req.body.password || "");
+    const body = req.body || {};
+    const username = typeof body.username === "string" ? body.username.trim() : "";
+    const email = typeof body.email === "string" ? body.email.trim().toLowerCase() : "";
+    const password = typeof body.password === "string" ? body.password : "";
 
     if (!username || !email || !password) {
       return res.status(400).json({ error: "Username, email, and password are required" });
@@ -186,13 +187,21 @@ router.post("/admin/users", tokenRequired, adminOnly, async (req, res) => {
       return res.status(400).json({ error: "Password must be at least 6 characters" });
     }
 
+    if (username.length > 80 || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Enter a valid username and email" });
+    }
+
+    if (Buffer.byteLength(password, "utf8") > 72) {
+      return res.status(400).json({ error: "Password must be at most 72 UTF-8 bytes" });
+    }
+
     const db = getDB();
     const users = db.collection("users");
 
     const existingUser = await users.findOne({
       $or: [
         { username },
-        { email },
+        { email: { $regex: `^${email.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } },
       ],
     });
 
@@ -212,10 +221,17 @@ router.post("/admin/users", tokenRequired, adminOnly, async (req, res) => {
 
     res.json({ message: "Admin created" });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(400).json({ error: "Username or email already exists" });
+    }
     console.error(err);
     res.status(500).json({ error: "Server error" });
   }
-});
+}
+
+// Public admin registration is intentionally enabled for this project.
+router.post("/register-admin", createAdmin);
+router.post("/admin/users", tokenRequired, adminOnly, createAdmin);
 
 // update user role only admin
 router.put("/admin/user/:username/role", tokenRequired, adminOnly, async (req, res) => {
