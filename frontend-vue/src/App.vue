@@ -48,9 +48,8 @@ const showStationSuggestions = ref(false);
 const favoriteSearch = ref('');
 const confirmStation = ref<Station | null>(null);
 const stationDetail = ref<Station | null>(null);
-const feedbackModal = ref(false);
 const successModal = ref(false);
-const ratings = ref([0, 0, 0, 0, 0]);
+const isFeedbackSubmitting = ref(false);
 const mapElement = ref<HTMLElement | null>(null);
 const selectedRouteAvailable = ref(false);
 
@@ -80,16 +79,15 @@ const dictionary = {
       saveFavorite: 'บันทึกสถานีที่คุณใช้บ่อย', noFavorites: 'ยังไม่มีสถานีโปรด',
       remove: 'ลบ', cancel: 'ยกเลิก', confirmRemove: 'ต้องการลบสถานีนี้ออกจากรายการโปรดใช่ไหม?', 
       searchStation: 'ค้นหาสถานี', noStations: 'ไม่พบสถานี', 
-      required: 'กรุณากรอกข้อมูลให้ครบถ้วน', feedback: 'ส่งข้อเสนอแนะ', tripSummary: 'สรุปการเดินทาง', noDirectRoute: 'ไม่มีเส้นทางรถตรงระหว่างสองสถานีนี้', minutes: 'นาที', busArrival: 'รถจะมาถึงใน', rideTime: 'เวลานั่งบนรถ', totalTime: 'รวมเวลาเดินทาง',
+      required: 'กรุณากรอกข้อมูลให้ครบถ้วน', feedback: 'ส่งข้อเสนอแนะ', feedbackFormTitle: 'แบบฟอร์มข้อเสนอแนะ', feedbackName: 'ชื่อ', feedbackEmail: 'อีเมลส่วนตัว', feedbackSubmit: 'ส่งข้อเสนอแนะ', tripSummary: 'สรุปการเดินทาง', noDirectRoute: 'ไม่มีเส้นทางรถตรงระหว่างสองสถานีนี้', minutes: 'นาที', busArrival: 'รถจะมาถึงใน', rideTime: 'เวลานั่งบนรถ', totalTime: 'รวมเวลาเดินทาง',
       success: 'สำเร็จ', successText: 'ส่งข้อเสนอแนะเรียบร้อยแล้ว', language: 'ภาษา',
-      languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'การเดินทาง', supportSection: 'ช่วยเหลือ', loading: 'กำลังโหลดข้อมูล...', mapKeyMissing: 'กรุณาตั้งค่า Google Maps API key ในไฟล์ frontend-vue/.env', mapLoadFailed: 'ไม่สามารถโหลด Google Maps ได้',
-      ratingQuestions: ['การบริการที่สถานี', 'สภาพรถรับส่ง', 'มารยาทและความปลอดภัยในการขับรถ', 'ความสุภาพของพนักงานขับรถ', 'ความพึงพอใจโดยรวม'], ratingHint: 'แตะดาวเพื่อให้คะแนน',
+      languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'การเดินทาง', supportSection: 'ช่วยเหลือ', loading: 'กำลังโหลดข้อมูล...', mapKeyMissing: 'กรุณาตั้งค่า Google Maps API key ในไฟล์ frontend-vue/.env', mapLoadFailed: 'ไม่สามารถโหลด Google Maps ได้', ratingQuestions: ['การบริการที่สถานี', 'สภาพรถรับส่ง', 'มารยาทและความปลอดภัยในการขับรถ', 'ความสุภาพของพนักงานขับรถ', 'ความพึงพอใจโดยรวม'], ratingHint: 'แตะดาวเพื่อให้คะแนน',
   },
   en: {
     title: 'MFU SHUTTLE BUS', home: 'Home', transit: 'MFU Transit', favorites: 'Favorite Stations', report: 'Feedback', settings: 'Settings', 
     from: 'From', to: 'To', fromStation: 'From station', toStation: 'To station', swap: 'Swap stations', close: 'Close', line1: 'Line 1', line2: 'Line 2', all: 'All', stations: 'stations',
     mainRoute: 'Main campus route', medicalRoute: 'MFU Medical Center route', findStation: 'Find station', addNew: 'Add new', saveFavorite: 'Save your favorite station', noFavorites: 'No favorite stations yet', remove: 'Delete', cancel: 'Cancel', confirmRemove: 'Remove this station from your favorite list?', searchStation: 'Search station', noStations: 'No stations found',
-    required: 'Please complete the required fields', feedback: 'Feedback', tripSummary: 'Trip summary', noDirectRoute: 'No direct bus route between these stations', minutes: 'min', busArrival: 'Bus arrives in', rideTime: 'Ride time', totalTime: 'Total travel time', success: 'Success', successText: 'Feedback sent successfully', language: 'Language',
+    required: 'Please complete the required fields', feedback: 'Feedback', feedbackFormTitle: 'Feedback Form', feedbackName: 'Name', feedbackEmail: 'Personal email', feedbackSubmit: 'Submit', tripSummary: 'Trip summary', noDirectRoute: 'No direct bus route between these stations', minutes: 'min', busArrival: 'Bus arrives in', rideTime: 'Ride time', totalTime: 'Total travel time', success: 'Success', successText: 'Feedback sent successfully', language: 'Language',
     languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'Transit', supportSection: 'Support', loading: 'Loading...', mapKeyMissing: 'Set the Google Maps API key in frontend-vue/.env', mapLoadFailed: 'Google Maps could not be loaded', ratingQuestions: ['Station service', 'Bus condition', 'Driving manners and safety', 'Driver politeness', 'Overall satisfaction'], ratingHint: 'Tap a star to rate',
   },
 } as const;
@@ -243,28 +241,18 @@ function confirmRemoveFavorite() {
   if (confirmStation.value) toggleFavorite(confirmStation.value.id); confirmStation.value = null; 
 }
 
-function openFeedback() {
-  ratings.value = [0, 0, 0, 0, 0];
-  feedbackModal.value = true;
-}
+type FeedbackPayload = { name: string; email: string; ratings: number[] };
 
-function ratingTitle(index: number) { 
-return t.value.ratingQuestions[index]; }
-
-async function submitFeedback() {
-  if (ratings.value.some((rating) => rating === 0)) {
-    message.value = t.value.required;
-    return;
-  }
+async function submitFeedback(payload: FeedbackPayload) {
+  isFeedbackSubmitting.value = true;
   try {
-    const detail = ratings.value
-      .map((rating, index) => `${ratingTitle(index)}: ${rating}/5`)
-      .join('\n');
+    const detail = [`Name: ${payload.name}`, `Email: ${payload.email}`, ...payload.ratings.map((rating, index) => `${t.value.ratingQuestions[index]}: ${rating}/5`)].join('\n');
     await api.sendReport('Feedback', detail, '-');
-    feedbackModal.value = false;
     successModal.value = true;
   } catch (error) {
     message.value = error instanceof Error ? error.message : t.value.mapLoadFailed;
+  } finally {
+    isFeedbackSubmitting.value = false;
   }
 }
 
@@ -573,8 +561,8 @@ watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
 
 <template>
   <main class="web-shell"><section class="phone">
-    <header v-if="page === 'home'" class="app-header home-header"><span class="header-spacer" aria-hidden="true"></span><div class="wordmark"><span>MFU</span> <b>SHUTTLE BUS</b></div><button class="language-btn" type="button" @click="setLanguage(lang === 'th' ? 'en' : 'th')"><img :src="lang === 'th' ? thaiFlagUrl : englishFlagUrl" alt="" /></button></header>
-    <header v-else class="app-header page-header"><button class="back-btn" type="button" :aria-label="t.home" @click="goHome">‹</button><div class="page-title">{{ page === 'transit' ? t.transit : page === 'favorites' ? t.favorites : page === 'report' ? t.report : page === 'language' ? t.language : t.settings }}</div><button class="page-home-btn" type="button" :aria-label="t.home" @click="goHome">⌂</button></header>
+    <header v-if="page === 'home'" class="app-header home-header"><button class="menu-btn appbar-menu-btn" type="button" aria-label="Menu" @click="isMenuOpen = true"><span></span><span></span><span></span></button><div class="wordmark"><span>MFU</span> <b>SHUTTLE BUS</b></div><button class="language-btn" type="button" @click="setLanguage(lang === 'th' ? 'en' : 'th')"><img :src="lang === 'th' ? thaiFlagUrl : englishFlagUrl" alt="" /></button></header>
+    <header v-else class="app-header page-header"><button class="back-btn" type="button" :aria-label="t.home" @click="goHome">‹</button><div class="page-title">{{ page === 'transit' ? t.transit : page === 'favorites' ? t.favorites : page === 'report' ? t.report : page === 'language' ? t.language : t.settings }}</div><button class="page-home-btn" type="button" :aria-label="t.home" :title="t.home" @click="goHome"><svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.4 12 3l9 7.4v9.1c0 .8-.7 1.5-1.5 1.5H4.5c-.8 0-1.5-.7-1.5-1.5z" fill="currentColor" /><path d="M9.2 21v-5.7h5.6V21" fill="#fff" /></svg></button></header>
     <p v-if="message" class="notice">{{ message }}</p>
     <div v-if="isMenuOpen" class="menu-backdrop" @click.self="isMenuOpen = false">
       <aside class="menu-drawer" role="dialog" aria-modal="true" :aria-label="t.settings">
@@ -602,27 +590,24 @@ watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
     </div>
 
   <section v-if="page === 'home'" class="screen home-screen"><div ref="mapElement" class="campus-map google-map" role="application" aria-label="MFU campus map"><div v-if="mapError" class="map-error">{{ mapError.includes('API_KEY') ? t.mapKeyMissing : t.mapLoadFailed }}</div></div>
-      <div v-if="isTripSearchCollapsed" class="collapsed-trip" @click="isTripSearchCollapsed = false"><button class="menu-btn map-menu-btn" type="button" aria-label="Menu" @click.stop="isMenuOpen = true"><span></span><span></span><span></span></button><strong>{{ fromQuery }} <span>→</span> {{ toQuery }}</strong><span>⌄</span></div><div v-else class="trip-card"><button class="menu-btn map-menu-btn" type="button" aria-label="Menu" @click="isMenuOpen = true"><span></span><span></span><span></span></button><div class="trip-marker-column" aria-hidden="true"><span class="origin-marker"></span><i></i><span class="destination-marker"></span></div><div class="trip-fields"><label><span>{{ t.from }}</span><div class="input-wrap"><input v-model="fromQuery" :placeholder="t.fromStation" @focus="activeSearchField = 'from'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedFromId = ''; showStationSuggestions = true" /><button v-if="fromQuery" class="clear-input" type="button" @click="clearStation('from')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'from'" class="suggestions"><button v-for="station in fromMatches" :key="station.id" type="button" @click="setStation('from', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div><label><span>{{ t.to }}</span><div class="input-wrap"><input v-model="toQuery" :placeholder="t.toStation" @focus="activeSearchField = 'to'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedToId = ''; showStationSuggestions = true" /><button v-if="toQuery" class="clear-input" type="button" @click="clearStation('to')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'to'" class="suggestions"><button v-for="station in toMatches" :key="station.id" type="button" @click="setStation('to', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div></div><div class="trip-actions"><button v-if="selectedFromId && selectedToId" class="icon-action" type="button" @click="isTripSearchCollapsed = true">⌃</button><button class="icon-action" type="button" :disabled="!fromQuery && !toQuery" :aria-label="t.swap" @click="swapStations">⇅</button></div></div>
+      <div v-if="isTripSearchCollapsed" class="collapsed-trip" @click="isTripSearchCollapsed = false"><strong>{{ fromQuery }} <span>→</span> {{ toQuery }}</strong><span>⌄</span></div><div v-else class="trip-card"><div class="trip-marker-column" aria-hidden="true"><span class="origin-marker"></span><i></i><span class="destination-marker"></span></div><div class="trip-fields"><label><span>{{ t.from }}</span><div class="input-wrap"><input v-model="fromQuery" :placeholder="t.fromStation" @focus="activeSearchField = 'from'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedFromId = ''; showStationSuggestions = true" /><button v-if="fromQuery" class="clear-input" type="button" @click="clearStation('from')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'from'" class="suggestions"><button v-for="station in fromMatches" :key="station.id" type="button" @click="setStation('from', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div><label><span>{{ t.to }}</span><div class="input-wrap"><input v-model="toQuery" :placeholder="t.toStation" @focus="activeSearchField = 'to'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedToId = ''; showStationSuggestions = true" /><button v-if="toQuery" class="clear-input" type="button" @click="clearStation('to')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'to'" class="suggestions"><button v-for="station in toMatches" :key="station.id" type="button" @click="setStation('to', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div></div><div class="trip-actions"><button v-if="selectedFromId && selectedToId" class="icon-action" type="button" @click="isTripSearchCollapsed = true">⌃</button><button class="icon-action" type="button" :disabled="!fromQuery && !toQuery" :aria-label="t.swap" @click="swapStations">⇅</button></div></div>
       <div class="line-selector"><button :class="{ active: selectedLine === 'line1' }" type="button" @click.stop="selectedLine = 'line1'"><img :src="busIconUrl" alt="" />{{ t.line1 }}</button><button :class="{ 'line-two-active': selectedLine === 'line2' }" type="button" @click.stop="selectedLine = 'line2'"><img :src="busIconUrl" alt="" />{{ t.line2 }}</button></div>
       <div v-if="tripEstimate && isTripSearchCollapsed" class="trip-estimate"><div class="trip-estimate-head"><strong>{{ t.tripSummary }}</strong><span>{{ fromQuery }} <b>→</b> {{ toQuery }}</span></div><template v-if="tripEstimate.available"><div class="trip-estimate-row"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><path d="M5 17h14M6 17V7c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2v10M4 17h16v2H4zM8 9h8M7 13h.01M17 13h.01M8 19v1M16 19v1" /></svg></span><strong>{{ t.busArrival }}</strong><b>{{ tripEstimate.arrivalMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span><strong>{{ t.rideTime }}</strong><b>{{ tripEstimate.rideMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row total"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="13" r="7" /><path d="M12 13V9M9 3h6M12 3v3M17 6l2-2" /></svg></span><strong>{{ t.totalTime }}</strong><b>{{ tripEstimate.totalMinutes }} {{ t.minutes }}</b></div></template><p v-else class="trip-estimate-unavailable">{{ t.noDirectRoute }}</p></div>
     </section>
 
     <!-- Transit page: browse shuttle bus lines and stations. -->
-    <TransitPage v-else-if="page === 'transit'" :t="t" :bus-icon-url="busIconUrl" :is-loading="isLoading" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
+    <TransitPage v-else-if="page === 'transit'" :t="t" :is-loading="isLoading" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
     <!-- Favorites page: manage saved stations. -->
     <FavoritesPage v-else-if="page === 'favorites'" :t="t" :favorite-stations="favoriteStations" :station-name="stationName" @add="showStationPicker = true" @remove="askRemoveFavorite" />
-    <!-- Feedback page: open the feedback rating form. -->
-    <FeedbackPage v-else-if="page === 'report'" :t="t" @open="openFeedback" />
+    <!-- Feedback page: submit a complete feedback form directly. -->
+    <FeedbackPage v-else-if="page === 'report'" :t="t" :is-submitting="isFeedbackSubmitting" @submit="submitFeedback" />
     <!-- Settings page: navigate to transit, favorites, feedback, and language. -->
     <SettingsPage v-else-if="page === 'settings'" :t="t" :language-label="lang === 'th' ? t.languageThai : t.languageEnglish" @open="openPage" />
     <!-- Language page: choose Thai or English. -->
     <LanguagePage v-else-if="page === 'language'" :t="t" :lang="lang" @select="(nextLang) => { setLanguage(nextLang); goHome(); }" />
     <div v-if="showStationPicker" class="modal-backdrop" @click.self="showStationPicker = false">
-    <section class="picker-modal"><div class="modal-head"><h2>{{ t.searchStation }}</h2><button type="button" @click="showStationPicker = false">×</button></div><div class="list-search"><span>⌕</span><input v-model="favoriteSearch" autofocus :placeholder="t.findStation" /></div><div class="picker-list"><button v-for="station in favoriteMatches" :key="station.id" type="button" @click="toggleFavorite(station.id); showStationPicker = false"><span>{{ stationName(station) }}</span><b>{{ favoriteIds.includes(station.id) ? '♥' : '+' }}</b></button><p v-if="!favoriteMatches.length" class="empty-state">{{ t.noStations }}</p></div></section></div>
+    <section class="picker-modal"><div class="modal-head"><h2>{{ t.searchStation }}</h2><button type="button" @click="showStationPicker = false">×</button></div><div class="list-search"><svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.2" fill="none" stroke="currentColor" stroke-width="2" /><path d="m15.5 15.5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" /></svg><input v-model="favoriteSearch" autofocus :placeholder="t.findStation" /></div><div class="picker-list"><button v-for="station in favoriteMatches" :key="station.id" type="button" @click="toggleFavorite(station.id); showStationPicker = false"><span>{{ stationName(station) }}</span><span v-if="favoriteIds.includes(station.id)" class="picker-favorite-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 10.2-8.8 10.2S3.2 14 3.2 8.8A4.8 4.8 0 0 1 12 6.2a4.8 4.8 0 0 1 8.8 2.6Z" /></svg></span><b v-else>+</b></button><p v-if="!favoriteMatches.length" class="empty-state">{{ t.noStations }}</p></div></section></div>
     <div v-if="confirmStation" class="modal-backdrop" @click.self="confirmStation = null"><section class="confirm-modal"><h2>{{ t.remove }}</h2><p>{{ t.confirmRemove }}</p><strong>{{ stationName(confirmStation) }}</strong><div class="modal-actions"><button class="secondary-btn" type="button" @click="confirmStation = null">{{ t.cancel }}</button><button class="danger-btn" type="button" @click="confirmRemoveFavorite">{{ t.remove }}</button></div></section></div>
-    <div v-if="feedbackModal" class="modal-backdrop" @click.self="feedbackModal = false"><form class="feedback-modal" @submit.prevent="submitFeedback"><div class="modal-head"><div><h2>{{ t.feedback }}</h2><p>{{ t.ratingHint }}</p></div><button type="button" @click="feedbackModal = false">×</button></div><div v-for="(_, index) in ratings" :key="index" class="rating-row"><strong>{{ ratingTitle(index) }}</strong><span><button v-for="star in 5" :key="star" type="button" @click="ratings[index] = star">{{ star <= ratings[index] ? '★' : '☆' }}</button></span></div><div class="modal-actions"><button class="secondary-btn" type="button" @click="feedbackModal = false">{{ t.cancel }}</button><button class="primary-btn" type="submit">{{ t.feedback }}</button></div></form></div>
     <div v-if="successModal" class="modal-backdrop" @click.self="successModal = false"><section class="success-modal"><span>✓</span><h2>{{ t.success }}</h2><p>{{ t.successText }}</p><button class="primary-btn" type="button" @click="successModal = false">{{ t.close }}</button></section></div>
   </section></main>
 </template>
-
-
