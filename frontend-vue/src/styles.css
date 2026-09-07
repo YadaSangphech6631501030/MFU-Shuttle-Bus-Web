@@ -92,7 +92,8 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .trip-estimate-head span { overflow: hidden; color: #777; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .trip-estimate-head span b { color: var(--mfu-red); padding: 0 4px; }
 .trip-estimate-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 35px; }
-.trip-estimate-icon { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: rgba(210,35,42,.1); color: var(--mfu-red); font-size: 16px; }
+.trip-estimate-icon { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; background: rgba(210,35,42,.1); color: var(--mfu-red); }
+.trip-estimate-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .trip-estimate-row strong { overflow: hidden; font-size: 12px; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
 .trip-estimate-row > b { color: #777; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .trip-estimate-row.total { margin-top: 2px; padding-top: 5px; border-top: 1px solid #f0f0f0; }
