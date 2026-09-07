@@ -395,4 +395,80 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
   .suggestions { top: calc(100% + 6px); left: 0; right: 0; margin-top: 0; max-height: min(38vh, 280px); }
 }
 
+/* Keep the map and page surfaces usable across phones, tablets, and short screens. */
+html, body, #app { width: 100%; overflow-x: hidden; }
+.phone { min-height: 100dvh; }
+.screen { min-height: calc(100dvh - 48px); }
+.home-screen { height: calc(100dvh - 48px); min-height: 420px; }
+.page-screen { width: min(100%, 940px); padding-inline: clamp(16px, 4vw, 32px); }
+.trip-card, .collapsed-trip { width: min(420px, calc(100% - 32px)); }
+.trip-estimate { top: clamp(78px, 13vh, 132px); }
+.line-selector { width: clamp(148px, 18vw, 180px); }
+.modal-backdrop { padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); }
+.feedback-modal, .picker-modal, .confirm-modal, .success-modal { max-height: min(88dvh, 680px); }
+
+@media (max-width: 480px) {
+  .app-header { padding-inline: max(12px, env(safe-area-inset-left)) max(12px, env(safe-area-inset-right)); }
+  .wordmark { max-width: calc(100vw - 112px); overflow: hidden; font-size: clamp(15px, 5vw, 20px); text-overflow: ellipsis; }
+  .trip-card, .collapsed-trip { left: 12px; width: calc(100% - 24px); }
+  .trip-card { grid-template-columns: 24px 12px minmax(0, 1fr) 32px; gap: 6px; padding: 10px; }
+  .trip-marker-column { grid-template-rows: 12px 30px 12px; }
+  .origin-marker, .destination-marker { width: 12px; height: 12px; }
+  .origin-marker { border-width: 3px; }
+  .input-wrap input { min-height: 42px; padding-inline: 10px 28px; font-size: 14px; }
+  .icon-action { width: 32px; height: 32px; font-size: 17px; }
+  .line-selector { right: 10px; bottom: max(10px, env(safe-area-inset-bottom)); width: 136px; }
+  .line-selector button { min-height: 42px; font-size: 14px; }
+  .line-selector img { width: 21px; height: 21px; }
+  .station-sheet-head h2 { font-size: clamp(18px, 5.5vw, 22px); }
+  .station-metric strong { font-size: clamp(15px, 4.5vw, 18px); }
+  .station-metric b { font-size: clamp(13px, 4vw, 16px); }
+  .feedback-grid { grid-template-columns: 1fr; }
+  .feedback-grid button { min-height: 76px; flex-direction: row; justify-content: flex-start; padding-inline: 18px; }
+  .modal-actions { flex-wrap: wrap; }
+  .modal-actions button { flex: 1 1 120px; }
+}
+
+@media (min-width: 701px) and (max-width: 1024px) {
+  .trip-card, .collapsed-trip { left: 24px; width: min(440px, calc(100% - 48px)); }
+  .page-screen { padding-top: 28px; }
+}
+
+@media (max-height: 620px) and (orientation: landscape) {
+  .home-screen { min-height: 300px; }
+  .trip-card { max-height: calc(100% - 24px); overflow-y: auto; }
+  .line-selector { bottom: 10px; }
+  .line-selector button { min-height: 38px; }
+}
+
+/* Center the application frame and floating content at every viewport width. */
+.web-shell {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+}
+
+.phone {
+  width: min(100%, 1440px);
+  margin-inline: auto;
+}
+
+.trip-card,
+.collapsed-trip {
+  left: 50%;
+  width: min(420px, calc(100% - 32px));
+  transform: translateX(-50%);
+}
+
+.page-screen {
+  margin-inline: auto;
+}
+
+@media (max-width: 480px) {
+  .trip-card,
+  .collapsed-trip {
+    width: calc(100% - 24px);
+  }
+}
+
 
