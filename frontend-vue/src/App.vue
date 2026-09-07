@@ -331,6 +331,25 @@ const tripEstimate = computed(() => {
   return { available: true as const, arrivalMinutes, rideMinutes, totalMinutes: arrivalMinutes + rideMinutes };
 });
 
+const originAllowedDestinations: Record<string, Set<string>> = {
+  station15: new Set(['station18', 'station19', 'station17', 'station20', 'station10', 'station13']),
+  station01: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => id !== 'station19')),
+  station07: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => !['station06', 'station16'].includes(id))),
+  station21: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => !['station19', 'station18'].includes(id))),
+  station09: new Set(['station15', 'station17', 'station20', 'station11', 'station05', 'station12', 'station10', 'station13', 'station14']),
+  station11: new Set(['station10', 'station13', 'station12', 'station14', 'station05', 'station15', 'station06', 'station18', 'station19', 'station21', 'station17', 'station20']),
+  station05: new Set(['station18', 'station19', 'station21', 'station17', 'station20']),
+  station16: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => id !== 'station02')),
+  station12: new Set(['station14', 'station06', 'station15', 'station05', 'station19', 'station17', 'station20', 'station21', 'station01', 'station18']),
+  station08: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => !['station02', 'station16', 'station07'].includes(id))),
+  station14: new Set(['station18', 'station06', 'station15', 'station05', 'station19', 'station01', 'station21', 'station17', 'station20']),
+  station10: new Set(['station11', 'station12', 'station13', 'station14', 'station18', 'station21', 'station17', 'station20', 'station01', 'station19', 'station06', 'station15', 'station05']),
+  station13: new Set(['station14', 'station06', 'station15', 'station05', 'station18', 'station19', 'station01', 'station17', 'station20', 'station21']),
+};
+const originsThatCanReachEverywhere = new Set(['station17', 'station20']);
+const blockedDestinationIds = new Set(['station15']);
+const explicitlyBlockedRoutes = new Set(['station21:station18', 'station21:station19', 'station18:station21', 'station18:station19', 'station18:station14', 'station18:station05', 'station18:station06', 'station18:station19', 'station18:station01', 'station18:station21', 'station18:station17', 'station18:station20', 'station19:station18', 'station19:station14', 'station07:station06', 'station07:station16', 'station01:station19', 'station01:station14', 'station10:station09', 'station13:station09', 'station14:station09', 'station11:station09', 'station05:station09', 'station05:station14', 'station12:station09', 'station11:station10', 'station13:station11', 'station12:station11', 'station14:station11', 'station05:station11', 'station15:station11', 'station06:station11', 'station06:station14', 'station18:station11', 'station14:station12', 'station05:station12', 'station19:station12', 'station19:station14', 'station18:station12', 'station13:station10', 'station12:station10', 'station14:station10', 'station18:station10', 'station19:station10', 'station01:station10', 'station06:station10', 'station05:station10', 'station14:station13', 'station06:station13', 'station05:station13', 'station18:station13', 'station19:station13', 'station01:station13']);
+
 function peopleText(value = 0) { 
   return lang.value === 'th' ? `${value} คน` : `${value} people`; 
 }
@@ -447,7 +466,13 @@ async function renderGoogleMap() {
     const nearestPathIndex = (station: Station) => selectedPath.reduce((nearest, point, index) => distanceMeters(point, station) < distanceMeters(selectedPath[nearest], station) ? index : nearest, 0);
     const fromIndex = nearestPathIndex(selectedFrom);
     const toIndex = nearestPathIndex(selectedTo);
-    if (fromIndex !== toIndex) {
+    const allowedDestinationIds = originAllowedDestinations[selectedFrom.id];
+    const isAllowedOriginDestination = !allowedDestinationIds || allowedDestinationIds.has(selectedTo.id);
+    const isEverywhereOrigin = originsThatCanReachEverywhere.has(selectedFrom.id) && selectedFrom.id !== selectedTo.id;
+    const routeKey = `${selectedFrom.id}:${selectedTo.id}`;
+    const isBlockedDestination = blockedDestinationIds.has(selectedTo.id) && selectedFrom.id !== 'station15' && !allowedDestinationIds?.has(selectedTo.id);
+    const isExplicitlyBlocked = explicitlyBlockedRoutes.has(routeKey);
+    if (!isBlockedDestination && !isExplicitlyBlocked && isAllowedOriginDestination && (fromIndex !== toIndex || allowedDestinationIds?.has(selectedTo.id) || isEverywhereOrigin)) {
       selectedRouteAvailable.value = true;
       const startIndex = Math.min(fromIndex, toIndex);
       const endIndex = Math.max(fromIndex, toIndex);
