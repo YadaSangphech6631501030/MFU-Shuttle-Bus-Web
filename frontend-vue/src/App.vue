@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type Station } from './services/api';
 import busUrl from '../assets/gemcar_right.png';
 import busIconUrl from '../assets/bus.png';
@@ -61,6 +62,7 @@ let stationOverlay: any = null;
 let stationOverlayStationId = '';
 let mapRenderGeneration = 0;
 let googleMapsPromise: Promise<void> | null = null;
+let mapResizeObserver: ResizeObserver | null = null;
 
 const dictionary = {
   th: {
@@ -79,16 +81,16 @@ const dictionary = {
       saveFavorite: 'บันทึกสถานีที่คุณใช้บ่อย', noFavorites: 'ยังไม่มีสถานีโปรด',
       remove: 'ลบ', cancel: 'ยกเลิก', confirmRemove: 'ต้องการลบสถานีนี้ออกจากรายการโปรดใช่ไหม?', 
       searchStation: 'ค้นหาสถานี', noStations: 'ไม่พบสถานี', 
-      required: 'กรุณากรอกข้อมูลให้ครบถ้วน', feedback: 'ส่งข้อเสนอแนะ', feedbackFormTitle: 'แบบฟอร์มข้อเสนอแนะ', feedbackName: 'ชื่อ', feedbackEmail: 'อีเมลส่วนตัว', feedbackSubmit: 'ส่งข้อเสนอแนะ', tripSummary: 'สรุปการเดินทาง', noDirectRoute: 'ไม่มีเส้นทางรถตรงระหว่างสองสถานีนี้', minutes: 'นาที', busArrival: 'รถจะมาถึงใน', rideTime: 'เวลานั่งบนรถ', totalTime: 'รวมเวลาเดินทาง',
+      required: 'กรุณากรอกข้อมูลให้ครบถ้วน', feedback: 'ส่งข้อเสนอแนะ', feedbackFormTitle: 'แบบฟอร์มข้อเสนอแนะ', feedbackName: 'ชื่อ', feedbackEmail: 'อีเมลส่วนตัว', feedbackNamePlaceholder: 'กรอกชื่อ', feedbackEmailPlaceholder: 'กรอกอีเมลส่วนตัว', feedbackSubmit: 'ส่งข้อเสนอแนะ', tripSummary: 'สรุปการเดินทาง', noDirectRoute: 'ไม่มีเส้นทางรถตรงระหว่างสองสถานีนี้', minutes: 'นาที', busArrival: 'รถจะมาถึงใน', rideTime: 'เวลานั่งบนรถ', totalTime: 'รวมเวลาเดินทาง',
       success: 'สำเร็จ', successText: 'ส่งข้อเสนอแนะเรียบร้อยแล้ว', language: 'ภาษา',
-      languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'การเดินทาง', supportSection: 'ช่วยเหลือ', loading: 'กำลังโหลดข้อมูล...', mapKeyMissing: 'กรุณาตั้งค่า Google Maps API key ในไฟล์ frontend-vue/.env', mapLoadFailed: 'ไม่สามารถโหลด Google Maps ได้', ratingQuestions: ['การบริการที่สถานี', 'สภาพรถรับส่ง', 'มารยาทและความปลอดภัยในการขับรถ', 'ความสุภาพของพนักงานขับรถ', 'ความพึงพอใจโดยรวม'], ratingHint: 'แตะดาวเพื่อให้คะแนน',
+      languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'การเดินทาง', supportSection: 'ช่วยเหลือ', loading: 'กำลังโหลดข้อมูล...', mapKeyMissing: 'กรุณาตั้งค่า Google Maps API key ในไฟล์ frontend-vue/.env', mapLoadFailed: 'ไม่สามารถโหลด Google Maps ได้', ratingQuestions: ['การบริการที่สถานี', 'สภาพรถรับส่ง', 'มารยาทและความปลอดภัยในการขับรถ', 'ความสุภาพของพนักงานขับรถ', 'ความพึงพอใจโดยรวม'],
   },
   en: {
     title: 'MFU SHUTTLE BUS', home: 'Home', transit: 'MFU Transit', favorites: 'Favorite Stations', report: 'Feedback', settings: 'Settings', 
     from: 'From', to: 'To', fromStation: 'From station', toStation: 'To station', swap: 'Swap stations', close: 'Close', line1: 'Line 1', line2: 'Line 2', all: 'All', stations: 'stations',
     mainRoute: 'Main campus route', medicalRoute: 'MFU Medical Center route', findStation: 'Find station', addNew: 'Add new', saveFavorite: 'Save your favorite station', noFavorites: 'No favorite stations yet', remove: 'Delete', cancel: 'Cancel', confirmRemove: 'Remove this station from your favorite list?', searchStation: 'Search station', noStations: 'No stations found',
-    required: 'Please complete the required fields', feedback: 'Feedback', feedbackFormTitle: 'Feedback Form', feedbackName: 'Name', feedbackEmail: 'Personal email', feedbackSubmit: 'Submit', tripSummary: 'Trip summary', noDirectRoute: 'No direct bus route between these stations', minutes: 'min', busArrival: 'Bus arrives in', rideTime: 'Ride time', totalTime: 'Total travel time', success: 'Success', successText: 'Feedback sent successfully', language: 'Language',
-    languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'Transit', supportSection: 'Support', loading: 'Loading...', mapKeyMissing: 'Set the Google Maps API key in frontend-vue/.env', mapLoadFailed: 'Google Maps could not be loaded', ratingQuestions: ['Station service', 'Bus condition', 'Driving manners and safety', 'Driver politeness', 'Overall satisfaction'], ratingHint: 'Tap a star to rate',
+    required: 'Please complete the required fields', feedback: 'Feedback', feedbackFormTitle: 'Feedback Form', feedbackName: 'Name', feedbackEmail: 'Email', feedbackNamePlaceholder: 'Enter name', feedbackEmailPlaceholder: 'Enter email', feedbackSubmit: 'Submit', tripSummary: 'Trip summary', noDirectRoute: 'No direct bus route between these stations', minutes: 'min', busArrival: 'Bus arrives in', rideTime: 'Ride time', totalTime: 'Total travel time', success: 'Success', successText: 'Feedback sent successfully', language: 'Language',
+    languageEnglish: 'English', languageThai: 'ไทย', transitSection: 'Transit', supportSection: 'Support', loading: 'Loading...', mapKeyMissing: 'Set the Google Maps API key in frontend-vue/.env', mapLoadFailed: 'Google Maps could not be loaded', ratingQuestions: ['Station service', 'Bus condition', 'Driving manners and safety', 'Driver politeness', 'Overall satisfaction'],
   },
 } as const;
 const t = computed(() => dictionary[lang.value]);
@@ -532,6 +534,13 @@ async function initGoogleMap() {
       clickableIcons: false,
       gestureHandling: 'greedy'
     });
+    mapResizeObserver?.disconnect();
+    if (typeof ResizeObserver !== 'undefined') {
+      mapResizeObserver = new ResizeObserver(() => {
+        window.google?.maps?.event.trigger(campusMap, 'resize');
+      });
+      mapResizeObserver.observe(mapElement.value);
+    }
     window.google.maps.event.addListenerOnce(campusMap, 'idle', () => { if (mapElement.value) mapElement.value.style.opacity = '1'; });
     campusMap.addListener('click', () => { closeStationPopup(); if (selectedLine.value !== 'all') selectedLine.value = 'all'; });
     await renderGoogleMap();
