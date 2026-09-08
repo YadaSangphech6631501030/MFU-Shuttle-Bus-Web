@@ -45,7 +45,8 @@ const seedBus = async () => {
     const collection = db.collection("buses"); 
 
     // delete existing data
-    await collection.deleteMany({});
+    // Keep GPS records; legacy fixtures are never returned by the live bus API.
+    await collection.deleteMany({ source: { $ne: 'ppgps' } });
 
     // add new data
     await collection.insertMany(buses);

@@ -1,0 +1,18 @@
+[
+  { "busId": "MFU01", "imei": "862476051846227", "line": null },
+  { "busId": "MFU02", "imei": "862476051846219", "line": null },
+  { "busId": "MFU03", "imei": "862476051832474", "line": null },
+  { "busId": "MFU04", "imei": "862476051833464", "line": null },
+  { "busId": "MFU05", "imei": "862476051832862", "line": null },
+  { "busId": "MFU06", "imei": "862476051832623", "line": null },
+  { "busId": "MFU07", "imei": "862476051832631", "line": null },
+  { "busId": "MFU08", "imei": "862476051832748", "line": null },
+  { "busId": "MFU09", "imei": "862476051832813", "line": null },
+  { "busId": "MFU10", "imei": "862476051832565", "line": null },
+  { "busId": "MFU11", "imei": "862476051832771", "line": null },
+  { "busId": "MFU12", "imei": "862476051832821", "line": null },
+  { "busId": "MFU13", "imei": "862476051832854", "line": null },
+  { "busId": "MFU14", "imei": "862476051832755", "line": null },
+  { "busId": "MFU15", "imei": "862476051847308", "line": null },
+  { "busId": "MFU16", "imei": "862476051832722", "line": null }
+]

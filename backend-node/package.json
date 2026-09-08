@@ -4,6 +4,8 @@
   "description": "",
   "main": "app.js",
   "scripts": {
+    "check:gps": "node scripts/check-gps.js",
+    "test:gps": "node --test test/gps.test.js",
     "test:routes": "node --test test/routes.test.js",
     "seed:routes": "node seed/seed_routes.js",
     "test": "echo \"Error: no test specified\" && exit 1",
