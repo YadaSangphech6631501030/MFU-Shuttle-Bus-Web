@@ -32,6 +32,9 @@ export type Bus = {
   status?: string;
   lat?: number | null;
   lng?: number | null;
+  // Live GPS metadata used for marker orientation and ETA calculations.
+  directionRaw?: number | null;
+  speedKph?: number | null;
 };
 
 export type LoginResponse = {

@@ -224,6 +224,8 @@ function createGpsService({ config, getDB, client, now = Date.now, vehicles = fl
           source: 'ppgps', connectionStatus, freshness, feedHealthy: feed.healthy,
           status: row?.movement === 'moving' ? 'RUNNING' : row?.movement === 'stopped' ? 'STOPPED' : 'UNKNOWN',
           lat: row?.lat ?? null, lng: row?.lng ?? null, speedRaw: row?.speedRaw ?? null,
+          // Expose live heading so the web map can orient each vehicle marker.
+          directionRaw: row?.directionRaw ?? null,
           speedUnit: row?.speedUnit || 'unknown', speedKph: row?.speedKph ?? null,
           alarm: row?.alarm || '', lastGpsAt: Number.isFinite(gpsMs) ? new Date(gpsMs).toISOString() : null,
           receivedAt: row?.receivedAt ? new Date(row.receivedAt).toISOString() : null,
