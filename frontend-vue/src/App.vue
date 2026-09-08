@@ -1,6 +1,5 @@
 <script setup lang="ts">
 // Main application shell: owns shared state, map rendering, and page navigation.
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type Station } from './services/api';
 import busUrl from '../assets/gemcar_right.png';
@@ -585,7 +584,12 @@ onMounted(async () => {
   busRefreshTimer = window.setInterval(() => { void refreshBusPositions(); }, 5000);
   await loadData(); await initGoogleMap();
 });
-onUnmounted(() => { passengerMounted = false; window.clearInterval(busRefreshTimer); });
+onBeforeUnmount(() => {
+  mapResizeObserver?.disconnect();
+  mapResizeObserver = null;
+  passengerMounted = false;
+  window.clearInterval(busRefreshTimer);
+});
 watch(buses, () => { renderBusMarkers(); });
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
 watch([selectedLine, stations, selectedFromId, selectedToId], () => {
