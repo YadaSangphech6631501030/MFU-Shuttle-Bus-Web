@@ -25,7 +25,7 @@ const startEngine = () => {
     }
 
     try {
-      const buses = await db.collection("buses").find().toArray();
+      const buses = await db.collection("buses").find({ source: { $ne: 'ppgps' } }).toArray();
 
       for (let bus of buses) {
         updateBus(bus);

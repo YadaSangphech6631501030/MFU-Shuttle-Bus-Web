@@ -175,3 +175,7 @@ Backend แบ่ง route หลักตามนี้
 - `docs/HANDOVER.md` - checklist สำหรับเตรียมส่งมอบระบบ
 - `docs/DOCKER.md` - คู่มือรันระบบด้วย Docker
 - `docs/AI-WORKFLOW.md` - กติกาการให้ AI/agent ทำงานกับ repo นี้
+
+## Live vehicle GPS
+
+Before local or Docker startup, copy `backend-node/.env.gps.example` to `backend-node/.env.gps` and fill in the GPS account locally. Use Node.js 20.12+ and run `npm --prefix backend-node run check:gps`. See the [GPS setup guide](docs/GPS.md) for session handling, data freshness and verification still needed.

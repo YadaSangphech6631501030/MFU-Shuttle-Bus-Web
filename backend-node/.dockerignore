@@ -2,6 +2,7 @@ node_modules
 runtime
 npm-debug.log*
 .env
+.env.gps
 .DS_Store
 *.log
 /yolov8s.pt

@@ -34,21 +34,41 @@ export type CrowdThresholds = {
 };
 
 export type Bus = {
+  connectionStatus?: 'fresh' | 'stale' | 'unknown';
+  freshness?: 'fresh' | 'stale' | 'unknown';
+  feedHealthy?: boolean;
+  source?: string;
+  speedRaw?: number | null;
+  speedUnit?: string;
+  alarm?: string;
+  receivedAt?: string | null;
   _id?: string;
   busId?: string;
   busNumber?: string;
   licensePlate?: string;
-  line?: string;
+  line?: string | null;
   status?: string;
   currentStationIndex?: number;
-  lat?: number;
-  lng?: number;
-  speedKph?: number;
+  lat?: number | null;
+  lng?: number | null;
+  speedKph?: number | null;
   heading?: number;
   accuracy?: number;
-  lastGpsAt?: string;
+  lastGpsAt?: string | null;
   updatedAt?: string;
   driverName?: string;
+};
+
+export type GpsStatus = {
+  state: string;
+  healthy: boolean;
+  configured: boolean;
+  lastSuccessAt: string | null;
+  lastAttemptAt: string | null;
+  invalidCount: number;
+  unmappedCount: number;
+  pollMs: number;
+  staleAfterMs: number;
 };
 
 export type Report = {

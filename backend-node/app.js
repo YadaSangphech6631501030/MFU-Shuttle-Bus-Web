@@ -7,7 +7,7 @@ const { PORT } = require("./config");
 const authRoutes = require("./routes/auth");
 const stationRoutes = require("./routes/station");
 const busRoutes = require("./routes/bus.routes");
-const startEngine = require("./engines/movement.engine");
+const gps = require('./services/gps-runtime');
 const reportRoutes = require("./routes/report.routes");
 const detectorRoutes = require("./routes/detector.routes");
 
@@ -39,7 +39,7 @@ app.get("/health", (req, res) => {
 async function start() {
   try {
     await connectDB();
-    startEngine();
+    gps.start();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);

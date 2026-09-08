@@ -19,16 +19,19 @@ export type ShuttleRoute = {
 };
 
 export type Bus = {
+  connectionStatus?: 'fresh' | 'stale' | 'unknown';
+  feedHealthy?: boolean;
+  lastGpsAt?: string | null;
   _id?: string;
   id?: string;
   busId?: string;
   busNumber?: string;
   name?: string;
-  line?: string;
+  line?: string | null;
   currentStationIndex?: number;
   status?: string;
-  lat?: number;
-  lng?: number;
+  lat?: number | null;
+  lng?: number | null;
 };
 
 export type LoginResponse = {
@@ -127,7 +130,7 @@ export const api = {
   },
 
   getBuses() {
-    return request<Bus[]>('/api/buses');
+    return request<Bus[]>('/api/buses', { signal: AbortSignal.timeout(12000) });
   },
 
   sendReport(type: string, detail: string, location: string) {
