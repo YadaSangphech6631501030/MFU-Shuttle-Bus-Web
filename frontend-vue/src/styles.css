@@ -217,6 +217,13 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .station-map-popup-status.low { background: rgba(46,125,50,.1); color: #2e7d32 !important; }
 .station-map-popup-status.medium { background: rgba(188,153,69,.14); color: var(--mfu-gold) !important; }
 .station-map-popup-status.high { background: rgba(210,35,42,.1); color: var(--mfu-red) !important; }
+/* Vehicle popup displays the bus number and the next route stops without a close button. */
+.bus-map-popup-host { position: absolute; z-index: 30; transform: translate(-50%, calc(-100% - 34px)); pointer-events: none; }
+.bus-map-popup { position: relative; min-width: 220px; display: grid; justify-items: center; gap: 3px; padding: 9px 12px; border: 1px solid #ededed; border-radius: 10px; background: rgba(255,255,255,.98); box-shadow: 0 5px 16px rgba(0,0,0,.18); color: #202124; text-align: center; }
+.bus-map-popup::after { content: ''; position: absolute; left: 50%; bottom: -7px; width: 13px; height: 13px; transform: translateX(-50%) rotate(45deg); border-right: 1px solid #ededed; border-bottom: 1px solid #ededed; background: #fff; }
+.bus-map-popup-number { color: #777; font-size: 13px; font-weight: 700; }
+.bus-map-popup-number strong { color: var(--mfu-red); font-size: 18px; font-weight: 800; }
+.bus-map-popup-route { width: 100%; margin-top: 5px; padding-top: 7px; border-top: 1px solid #ededed; color: #333; font-size: 11px; line-height: 1.45; text-align: left; }
 
 .page-screen { max-width: 940px; margin: 0 auto; padding: 26px 24px 42px; overflow: auto; background: #fff; }
 .loading-state, .empty-state { padding: 40px 16px; color: #777; text-align: center; }

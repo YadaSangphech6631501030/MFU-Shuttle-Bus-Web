@@ -2,7 +2,10 @@
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type Station } from './services/api';
-import busUrl from '../assets/gemcar_right.png';
+import busFrontUrl from '../assets/gamcar_front.png';
+import busBackUrl from '../assets/gemcar_back.png';
+import busLeftUrl from '../assets/gemcar_left.png';
+import busRightUrl from '../assets/gemcar_right.png';
 import busIconUrl from '../assets/bus.png';
 import busStopUrl from '../assets/bus_stop_2.png';
 import thaiFlagUrl from '../assets/thai_flag.png';
@@ -16,6 +19,7 @@ import type { Lang } from './types';
 
 type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language';
 type Line = 'line1' | 'line2';
+type RoutePoint = { lat: number; lng: number };
 type GoogleMap = any;
 
 declare global {
@@ -57,8 +61,12 @@ let campusMap: GoogleMap = null;
 let mapMarkers: any[] = [];
 let mapPolylines: any[] = [];
 let busMarkers: any[] = [];
+let busOverlay: any = null;
+let busOverlayKey = '';
 let stationOverlay: any = null;
+const routePathCache = new Map<Line, RoutePoint[]>();
 let stationOverlayStationId = '';
+let stationPopupTimer: number | undefined;
 let mapRenderGeneration = 0;
 let googleMapsPromise: Promise<void> | null = null;
 let mapResizeObserver: ResizeObserver | null = null;
@@ -266,11 +274,18 @@ function filteredLineStations(line: Line) {
   }
 
 function busLineKey(bus: Bus): Line | null {
-  if (bus.line === 'line1' || bus.line === '1') 
-       return 'line1'; 
-  if (bus.line === 'line2' || bus.line === '2') 
-      return 'line2'; return null; 
-  }
+  const line = String(bus.line ?? '').trim().toLowerCase();
+  if (line === 'line1' || line === '1') return 'line1';
+  if (line === 'line2' || line === '2') return 'line2';
+  return null;
+}
+
+function busMatchesSelectedLine(bus: Bus) {
+  if (selectedLine.value === 'all') return true;
+  const line = busLineKey(bus);
+  // GPS records without line metadata should remain visible until the backend assigns a line.
+  return line === null || line === selectedLine.value;
+}
 
 function busPosition(bus: Bus) {
   if (bus.connectionStatus !== 'fresh' || !bus.feedHealthy) return null;
@@ -278,17 +293,252 @@ function busPosition(bus: Bus) {
   return { lat: bus.lat, lng: bus.lng };
 }
 
-function renderBusMarkers() {
+// Project a GPS point onto a route so ETA and station direction use road distance.
+function routeProgressAtPosition(position: RoutePoint, path: RoutePoint[]) {
+  if (path.length < 2) return null;
+  let cumulativeDistance = 0;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+  let nearestProgress = 0;
+  let totalDistance = 0;
+
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const start = path[index];
+    const end = path[index + 1];
+    const deltaLng = end.lng - start.lng;
+    const deltaLat = end.lat - start.lat;
+    const lengthSquared = deltaLng ** 2 + deltaLat ** 2;
+    const progress = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((position.lng - start.lng) * deltaLng + (position.lat - start.lat) * deltaLat) / lengthSquared));
+    const closest = { lat: start.lat + deltaLat * progress, lng: start.lng + deltaLng * progress };
+    const segmentDistance = distanceMeters(start, end);
+    const distanceToPath = distanceMeters(position, closest);
+    if (distanceToPath < nearestDistance) {
+      nearestDistance = distanceToPath;
+      nearestProgress = cumulativeDistance + segmentDistance * progress;
+    }
+    cumulativeDistance += segmentDistance;
+  }
+
+  totalDistance = cumulativeDistance;
+  return { distanceFromStart: nearestProgress, distanceToPath: nearestDistance, totalDistance };
+}
+
+function routeDistanceBetween(first: RoutePoint, second: RoutePoint, path?: RoutePoint[]) {
+  if (!path) return distanceMeters(first, second);
+  const firstProgress = routeProgressAtPosition(first, path);
+  const secondProgress = routeProgressAtPosition(second, path);
+  if (!firstProgress || !secondProgress) return distanceMeters(first, second);
+  return Math.abs(firstProgress.distanceFromStart - secondProgress.distanceFromStart);
+}
+
+function bearingBetween(from: RoutePoint, to: RoutePoint) {
+  const fromLat = from.lat * Math.PI / 180;
+  const toLat = to.lat * Math.PI / 180;
+  const deltaLng = (to.lng - from.lng) * Math.PI / 180;
+  const y = Math.sin(deltaLng) * Math.cos(toLat);
+  const x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
+  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+}
+
+function routeBearingAtPosition(position: RoutePoint, path: RoutePoint[]) {
+  if (path.length < 2) return null;
+  let nearestBearing: number | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  for (let index = 0; index < path.length - 1; index += 1) {
+    const start = path[index];
+    const end = path[index + 1];
+    const deltaLng = end.lng - start.lng;
+    const deltaLat = end.lat - start.lat;
+    const lengthSquared = deltaLng ** 2 + deltaLat ** 2;
+    const progress = lengthSquared === 0
+      ? 0
+      : Math.max(0, Math.min(1, ((position.lng - start.lng) * deltaLng + (position.lat - start.lat) * deltaLat) / lengthSquared));
+    const closest = { lat: start.lat + deltaLat * progress, lng: start.lng + deltaLng * progress };
+    const distance = (position.lng - closest.lng) ** 2 + (position.lat - closest.lat) ** 2;
+    if (distance < nearestDistance) {
+      nearestDistance = distance;
+      nearestBearing = bearingBetween(start, end);
+    }
+  }
+  return nearestBearing;
+}
+
+function angleDifference(first: number, second: number) {
+  return Math.abs(((first - second + 540) % 360) - 180);
+}
+
+// Combine route geometry with GPS heading to identify the vehicle's travel direction.
+function busRouteBearing(bus: Bus, position: RoutePoint, paths: Map<Line, RoutePoint[]>) {
+  const busLine = busLineKey(bus);
+  const candidatePaths = busLine
+    ? [[busLine, paths.get(busLine)] as const]
+    : Array.from(paths.entries());
+  const availablePaths = candidatePaths.filter(([, path]) => path?.length);
+  let nearestBearing: number | null = null;
+  let nearestDistance = Number.POSITIVE_INFINITY;
+
+  availablePaths.forEach(([, path]) => {
+    const bearing = routeBearingAtPosition(position, path!);
+    if (bearing === null) return;
+    const nearestPointDistance = path!.reduce((distance, point) => Math.min(distance, (position.lng - point.lng) ** 2 + (position.lat - point.lat) ** 2), Number.POSITIVE_INFINITY);
+    if (nearestPointDistance < nearestDistance) {
+      nearestDistance = nearestPointDistance;
+      nearestBearing = bearing;
+    }
+  });
+
+  if (nearestBearing === null) return Number.isFinite(bus.directionRaw) ? Number(bus.directionRaw) : null;
+  if (Number.isFinite(bus.directionRaw) && angleDifference(nearestBearing, Number(bus.directionRaw)) > 90) {
+    return (nearestBearing + 180) % 360;
+  }
+  return nearestBearing;
+}
+
+function busIconForDirection(directionRaw: number | null | undefined) {
+  if (!Number.isFinite(directionRaw)) return busRightUrl;
+  const direction = ((Number(directionRaw) % 360) + 360) % 360;
+  // The front asset faces toward the bottom of the map, so southbound uses front.
+  if (direction < 45 || direction >= 315) return busBackUrl;
+  if (direction < 135) return busRightUrl;
+  if (direction < 225) return busFrontUrl;
+  return busLeftUrl;
+}
+
+// Point the vehicle asset toward the next station, with route-specific orientation rules.
+function busIconForRouteContext(bus: Bus, position: RoutePoint) {
+  const line = nearestBusLine(bus, position);
+  const path = routePathCache.get(line);
+  if (!path) return busIconForDirection(bus.directionRaw);
+  const busProgress = routeProgressAtPosition(position, path);
+  const routeBearing = routeBearingAtPosition(position, path);
+  if (!busProgress || routeBearing === null) return busIconForDirection(bus.directionRaw);
+
+  const ovalPond = stations.value.find((station) => station.id === 'station09' || station.name.toLowerCase() === 'oval pond');
+  const mSquare = stations.value.find((station) => station.id === 'station14' || station.name.toLowerCase() === 'm-square building');
+  const lamduan = stations.value.find((station) => station.id === 'station01' || station.name.toLowerCase().includes('lamduan dormitory 2'));
+  const ovalProgress = ovalPond ? routeProgressAtPosition(ovalPond, path) : null;
+  const mSquareProgress = mSquare ? routeProgressAtPosition(mSquare, path) : null;
+  const nextStation = busStationSummary(bus, position)?.next;
+  const nextStationBearing = nextStation ? bearingBetween(position, nextStation) : null;
+
+  const actualBearing = Number(bus.directionRaw);
+  const heading = Number.isFinite(actualBearing) ? actualBearing : routeBearing;
+  const headingToLamduan = lamduan ? bearingBetween(position, lamduan) : routeBearing;
+  const returningToLamduan = angleDifference(heading, headingToLamduan) <= 90;
+  const nearOvalPond = ovalProgress && Math.abs(busProgress.distanceFromStart - ovalProgress.distanceFromStart) <= 120;
+  const nearMSquare = mSquareProgress && Math.abs(busProgress.distanceFromStart - mSquareProgress.distanceFromStart) <= 120;
+
+  if (nextStationBearing !== null) {
+    const nextStationIcon = busIconForDirection(nextStationBearing);
+    // Oval Pond must never show the rear asset.
+    if (nearOvalPond) return nextStationIcon === busBackUrl ? busFrontUrl : nextStationIcon;
+    // Returning from M-Square to Lamduan must never show the front asset.
+    if (nearMSquare && returningToLamduan) return busBackUrl;
+    return nextStationIcon;
+  }
+
+  return busIconForDirection(busRouteBearing(bus, position, new Map([[line, path]])));
+}
+
+function closeBusPopup() {
+  if (busOverlay) busOverlay.setMap(null);
+  busOverlay = null;
+  busOverlayKey = '';
+}
+
+function nearestBusLine(bus: Bus, position: RoutePoint) {
+  const knownLine = busLineKey(bus);
+  if (knownLine) return knownLine;
+  if (selectedLine.value !== 'all') return selectedLine.value;
+  return (['line1', 'line2'] as Line[]).reduce<Line>((nearestLine, line) => {
+    const path = routePathCache.get(line);
+    const nearestDistance = path ? routeProgressAtPosition(position, path)?.distanceToPath ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY;
+    const currentPath = routePathCache.get(nearestLine);
+    const currentDistance = currentPath ? routeProgressAtPosition(position, currentPath)?.distanceToPath ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY;
+    return nearestDistance < currentDistance ? line : nearestLine;
+  }, 'line1');
+}
+
+function busStationSummary(bus: Bus, position: RoutePoint) {
+  const line = nearestBusLine(bus, position);
+  const lineStations = stations.value.filter((station) => station.lines?.includes(line));
+  if (!lineStations.length) return null;
+  const path = routePathCache.get(line);
+  const orderedStations = path
+    ? lineStations
+      .map((station) => ({ station, progress: routeProgressAtPosition(station, path)?.distanceFromStart ?? 0 }))
+      .sort((first, second) => first.progress - second.progress)
+      .map(({ station }) => station)
+    : lineStations;
+  const currentIndex = orderedStations.reduce((nearest, station, index) => {
+    const currentDistance = distanceMeters(position, station);
+    return currentDistance < nearest.distance ? { index, distance: currentDistance } : nearest;
+  }, { index: 0, distance: Number.POSITIVE_INFINITY }).index;
+  const routeBearing = path ? routeBearingAtPosition(position, path) : null;
+  const actualBearing = Number(bus.directionRaw);
+  const movingForward = routeBearing === null || !Number.isFinite(actualBearing) || angleDifference(routeBearing, actualBearing) <= 90;
+  const nextIndex = (currentIndex + (movingForward ? 1 : -1) + orderedStations.length) % orderedStations.length;
+  return { current: orderedStations[currentIndex], next: orderedStations[nextIndex] };
+}
+
+function busPopupHtml(bus: Bus, position: RoutePoint) {
+  const busNumber = bus.busNumber || bus.busId?.replace(/^MFU/i, '') || '-';
+  const summary = busStationSummary(bus, position);
+  const currentLabel = summary ? escapeHtml(stationName(summary.current)) : '-';
+  const nextLabel = summary ? escapeHtml(stationName(summary.next)) : '-';
+  return `<div class="bus-map-popup"><div class="bus-map-popup-number">${lang.value === 'th' ? 'หมายเลขรถ' : 'Bus number'}: <strong>${escapeHtml(busNumber)}</strong></div><div class="bus-map-popup-route"><div>${lang.value === 'th' ? 'สถานีปัจจุบัน' : 'Current station'}: ${currentLabel}</div><div>${lang.value === 'th' ? 'สถานีถัดไป' : 'Next station'}: ${nextLabel}</div></div></div>`;
+}
+
+function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
+  const busKey = bus.busId || bus.busNumber || `${position.lat}:${position.lng}`;
+  if (busOverlayKey === busKey) {
+    closeBusPopup();
+    return;
+  }
+
+  closeBusPopup();
+  const overlay = new window.google.maps.OverlayView();
+  overlay.onAdd = () => {
+    const element = document.createElement('div');
+    element.className = 'bus-map-popup-host';
+    element.innerHTML = busPopupHtml(bus, position);
+    overlay.element = element;
+    overlay.getPanes().floatPane.appendChild(element);
+  };
+  overlay.draw = () => {
+    if (!overlay.element) return;
+    const projection = overlay.getProjection();
+    if (!projection) return;
+    const point = projection.fromLatLngToDivPixel(new window.google.maps.LatLng(position));
+    if (!point) return;
+    overlay.element.style.left = `${point.x}px`;
+    overlay.element.style.top = `${point.y}px`;
+  };
+  overlay.onRemove = () => {
+    overlay.element?.remove();
+    overlay.element = null;
+  };
+  busOverlay = overlay;
+  busOverlayKey = busKey;
+  overlay.setMap(campusMap);
+}
+
+function renderBusMarkers(paths = routePathCache) {
   busMarkers.forEach(marker => marker.setMap(null));
   busMarkers = [];
+  closeBusPopup();
   if (!campusMap || !window.google?.maps) return [];
   const positions: Array<{ lat: number; lng: number }> = [];
-  buses.value.filter(bus => selectedLine.value === 'all' || busLineKey(bus) === selectedLine.value).forEach(bus => {
+  buses.value.filter(busMatchesSelectedLine).forEach(bus => {
     const position = busPosition(bus);
     if (!position) return;
     positions.push(position);
-    busMarkers.push(new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20,
-      icon: { url: busUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } }));
+    const marker = new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20,
+      icon: { url: busIconForRouteContext(bus, position), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } });
+    marker.addListener('click', () => toggleBusPopup(bus, position));
+    busMarkers.push(marker);
   });
   return positions;
 }
@@ -306,13 +556,34 @@ function distanceMeters(
   return 2 * earthRadius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
 }
 
+// Estimate arrival from the nearest fresh bus, route distance, and its live speed.
 function stationArrivalMinutes(station: Station) {
+  const lines = (station.lines || []).filter((line): line is Line => line === 'line1' || line === 'line2');
+  const estimates = lines.map((line) => stationArrivalMinutesForLine(station, line)).filter((value): value is number => value !== null);
+  if (estimates.length) return Math.min(...estimates);
   return stationArrivalMinutesForLine(station);
 }
 
-function stationArrivalMinutesForLine(_station: Station, _line?: Line): number | null {
-  // GPS positions alone do not establish route direction or a reliable arrival time.
-  return null;
+function stationArrivalMinutesForLine(station: Station, line?: Line): number | null {
+  const stationPosition = { lat: station.lat, lng: station.lng };
+  const routePath = line ? routePathCache.get(line) : undefined;
+  const estimates = buses.value
+    .filter((bus) => {
+      if (!busPosition(bus)) return false;
+      if (!line) return true;
+      const busLine = busLineKey(bus);
+      return busLine === null || busLine === line;
+    })
+    .map((bus) => {
+      const position = busPosition(bus);
+      if (!position) return null;
+      const distance = routeDistanceBetween(position, stationPosition, routePath);
+      const speedKph = Number(bus.speedKph);
+      const effectiveSpeedKph = Number.isFinite(speedKph) && speedKph > 1 ? speedKph : 18;
+      return Math.max(1, Math.ceil(distance / (effectiveSpeedKph * 1000 / 3600) / 60));
+    })
+    .filter((value): value is number => value !== null);
+  return estimates.length ? Math.min(...estimates) : null;
 }
 
 const tripEstimate = computed(() => {
@@ -383,8 +654,32 @@ function stationPopupHtml(station: Station) {
   return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${minuteText(stationArrivalMinutes(station))}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}">${stationStatusLabel(station.status)}</b></div></div>`;
 }
 
-function closeStationPopup() { 
-  if (stationOverlay) stationOverlay.setMap(null); stationOverlay = null; stationOverlayStationId = ''; stationDetail.value = null; 
+function bindStationPopupActions(element: HTMLElement, station: Station) {
+  const favoriteButton = element.querySelector<HTMLButtonElement>('.station-favorite-button');
+  favoriteButton?.addEventListener('click', (event) => {
+    event.stopPropagation();
+    toggleFavorite(station.id);
+    favoriteButton.classList.toggle('is-favorite', favoriteIds.value.includes(station.id));
+    favoriteButton.setAttribute('aria-pressed', String(favoriteIds.value.includes(station.id)));
+    favoriteButton.setAttribute('aria-label', favoriteIds.value.includes(station.id) ? 'Remove favorite' : 'Add favorite');
+  });
+}
+
+function refreshStationPopup() {
+  const station = stationDetail.value;
+  const element = stationOverlay?.element as HTMLElement | undefined;
+  if (!station || !element) return;
+  element.innerHTML = stationPopupHtml(station);
+  bindStationPopupActions(element, station);
+}
+
+function closeStationPopup() {
+  if (stationPopupTimer) window.clearTimeout(stationPopupTimer);
+  stationPopupTimer = undefined;
+  if (stationOverlay) stationOverlay.setMap(null);
+  stationOverlay = null;
+  stationOverlayStationId = '';
+  stationDetail.value = null;
 }
 
 function toggleStationPopup(station: Station) {
@@ -393,11 +688,14 @@ function toggleStationPopup(station: Station) {
   stationDetail.value = station;
   stationOverlayStationId = station.id;
   const overlay = new window.google.maps.OverlayView();
-  overlay.onAdd = () => { const element = document.createElement('div'); element.className = 'station-map-popup-host'; element.innerHTML = stationPopupHtml(station); const favoriteButton = element.querySelector<HTMLButtonElement>('.station-favorite-button'); favoriteButton?.addEventListener('click', (event) => { event.stopPropagation(); toggleFavorite(station.id); favoriteButton.classList.toggle('is-favorite', favoriteIds.value.includes(station.id)); favoriteButton.setAttribute('aria-pressed', String(favoriteIds.value.includes(station.id))); favoriteButton.setAttribute('aria-label', favoriteIds.value.includes(station.id) ? 'Remove favorite' : 'Add favorite'); }); overlay.element = element; overlay.getPanes().floatPane.appendChild(element); };
+  overlay.onAdd = () => { const element = document.createElement('div'); element.className = 'station-map-popup-host'; element.innerHTML = stationPopupHtml(station); bindStationPopupActions(element, station); overlay.element = element; overlay.getPanes().floatPane.appendChild(element); };
   overlay.draw = () => { if (!overlay.element) return; const projection = overlay.getProjection(); if (!projection) return; const point = projection.fromLatLngToDivPixel(new window.google.maps.LatLng(station.lat, station.lng)); if (!point) return; overlay.element.style.left = `${point.x}px`; overlay.element.style.top = `${point.y}px`; };
   overlay.onRemove = () => { overlay.element?.remove(); overlay.element = null; };
   stationOverlay = overlay;
   overlay.setMap(campusMap);
+  stationPopupTimer = window.setTimeout(() => {
+    if (stationOverlay === overlay) closeStationPopup();
+  }, 2 * 60 * 1000);
 }
 
 function loadGoogleMapsScript() {
@@ -406,7 +704,7 @@ function loadGoogleMapsScript() {
 }
 
 function removeMapOverlays() { 
-  [...mapMarkers, ...mapPolylines, ...busMarkers].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; 
+  [...mapMarkers, ...mapPolylines, ...busMarkers].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; closeBusPopup();
 }
 
 async function loadRoute(line: Line) { 
@@ -427,7 +725,7 @@ async function renderGoogleMap() {
   const points: Array<{ lat: number; lng: number }> = [];
   const selectedFrom = stations.value.find((station) => station.id === selectedFromId.value);
   const selectedTo = stations.value.find((station) => station.id === selectedToId.value);
-  const routePaths = new Map<Line, Array<{ lat: number; lng: number }>>();
+  const routePaths = new Map<Line, RoutePoint[]>();
   const selectedRouteLine = selectedFrom && selectedTo
     ? lines.find((line) => selectedFrom.lines?.includes(line) && selectedTo.lines?.includes(line))
     : undefined;
@@ -438,6 +736,7 @@ async function renderGoogleMap() {
     const path = await loadRoute(line);
     if (generation !== mapRenderGeneration) return;
     routePaths.set(line, path);
+    routePathCache.set(line, path);
     points.push(...path);
     if (path.length > 1 && !selectedRouteLine) {
       mapPolylines.push(new window.google.maps.Polyline({
@@ -456,7 +755,7 @@ async function renderGoogleMap() {
     ? stations.value.filter((station) => station.id === selectedFrom.id || station.id === selectedTo.id)
     : stations.value.filter((station) => lineSelection === 'all' || station.lines?.includes(lineSelection));
   stationList.forEach((station) => { points.push({ lat: station.lat, lng: station.lng }); const marker = new window.google.maps.Marker({ position: { lat: station.lat, lng: station.lng }, map: campusMap, title: stationName(station), icon: { url: busStopUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 50) } }); marker.addListener('click', () => toggleStationPopup(station)); mapMarkers.push(marker); });
-  points.push(...renderBusMarkers());
+  points.push(...renderBusMarkers(routePaths));
   const selectedPath = selectedRouteLine ? routePaths.get(selectedRouteLine) : undefined;
   if (selectedFrom && selectedTo && selectedPath && selectedPath.length > 1) {
     const nearestPathIndex = (station: Station) => selectedPath.reduce((nearest, point, index) => distanceMeters(point, station) < distanceMeters(selectedPath[nearest], station) ? index : nearest, 0);
@@ -585,12 +884,15 @@ onMounted(async () => {
   await loadData(); await initGoogleMap();
 });
 onBeforeUnmount(() => {
+  // Release map overlays, timers, and observers when the app shell is removed.
+  closeStationPopup();
+  closeBusPopup();
   mapResizeObserver?.disconnect();
   mapResizeObserver = null;
   passengerMounted = false;
   window.clearInterval(busRefreshTimer);
 });
-watch(buses, () => { renderBusMarkers(); });
+watch(buses, () => { renderBusMarkers(); refreshStationPopup(); });
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
 watch([selectedLine, stations, selectedFromId, selectedToId], () => {
   selectedRouteAvailable.value = false;
