@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Main application shell: owns shared state, map rendering, and page navigation.
-import { computed, nextTick, onMounted, ref, watch } from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type Station } from './services/api';
 import busUrl from '../assets/gemcar_right.png';
 import busIconUrl from '../assets/bus.png';
@@ -61,6 +61,7 @@ let stationOverlay: any = null;
 let stationOverlayStationId = '';
 let mapRenderGeneration = 0;
 let googleMapsPromise: Promise<void> | null = null;
+let mapResizeObserver: ResizeObserver | null = null;
 
 const dictionary = {
   th: {
@@ -525,6 +526,13 @@ async function initGoogleMap() {
       clickableIcons: false,
       gestureHandling: 'greedy'
     });
+    mapResizeObserver?.disconnect();
+    if (typeof ResizeObserver !== 'undefined') {
+      mapResizeObserver = new ResizeObserver(() => {
+        window.google?.maps?.event.trigger(campusMap, 'resize');
+      });
+      mapResizeObserver.observe(mapElement.value);
+    }
     window.google.maps.event.addListenerOnce(campusMap, 'idle', () => { if (mapElement.value) mapElement.value.style.opacity = '1'; });
     campusMap.addListener('click', () => { closeStationPopup(); if (selectedLine.value !== 'all') selectedLine.value = 'all'; });
     await renderGoogleMap();
@@ -552,6 +560,7 @@ async function ensureHomeMap() {
 }
 async function loadData() { isLoading.value = true; message.value = ''; try { const [line1, line2, busList] = await Promise.all([api.getStations('line1'), api.getStations('line2'), api.getBuses().catch(() => [])]); const stationMap = new Map<string, Station>(); [...line1, ...line2].forEach((station) => { const old = stationMap.get(station.id); stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station); }); stations.value = [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); buses.value = busList; } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
 onMounted(async () => { await loadData(); await initGoogleMap(); });
+onBeforeUnmount(() => mapResizeObserver?.disconnect());
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
 watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
   selectedRouteAvailable.value = false;

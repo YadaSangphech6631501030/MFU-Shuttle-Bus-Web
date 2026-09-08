@@ -29,14 +29,14 @@
 }
 
 * { box-sizing: border-box; }
-html, body, #app { min-width: 320px; min-height: 100%; margin: 0; }
-body { min-height: 100vh; background: #fff; }
+html, body, #app { min-width: 0; min-height: 100%; margin: 0; }
+body { min-height: 100vh; min-height: 100dvh; background: #fff; }
 button, input, textarea { font: inherit; }
 button { cursor: pointer; }
 button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px solid rgba(210, 35, 42, .22); outline-offset: 2px; }
 
-.web-shell { width: 100%; min-height: 100vh; background: #fff; }
-.phone { width: 100%; min-height: 100vh; overflow: hidden; position: relative; background: #fff; }
+.web-shell { width: 100%; min-height: 100vh; min-height: 100dvh; background: #fff; }
+.phone { width: 100%; min-height: 100vh; min-height: 100dvh; overflow: hidden; position: relative; background: #fff; }
 .app-header { position: relative; z-index: 30; width: 100%; height: 64px; display: grid; grid-template-columns: 52px 1fr 52px; align-items: center; padding: 0 28px; background: #fff; border-bottom: 1px solid #dedede; }
 .wordmark { justify-self: center; color: var(--mfu-gold); font-size: 28px; font-weight: 800; letter-spacing: 0; white-space: nowrap; }
 .wordmark span { color: var(--mfu-red); }
@@ -56,7 +56,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .notice { position: fixed; z-index: 100; left: 50%; top: 76px; width: min(460px, calc(100% - 32px)); transform: translateX(-50%); margin: 0; padding: 12px 16px; border: 1px solid #f2c7c7; border-radius: 10px; background: #fff8f8; color: #a32626; text-align: center; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
 
 .screen { min-height: calc(100vh - 64px); }
-.home-screen { position: relative; height: calc(100vh - 64px); min-height: 480px; overflow: hidden; background: #e8f1eb; }
+.home-screen { position: relative; height: calc(100vh - 64px); height: calc(100dvh - 64px); min-height: 480px; overflow: hidden; background: #e8f1eb; }
 .campus-map, .google-map { position: absolute; inset: 0; width: 100%; height: 100%; background: #e8f1eb; }
 .map-error { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: min(390px, calc(100% - 32px)); padding: 14px 18px; border: 1px solid #efc4c4; border-radius: 12px; background: rgba(255,255,255,.96); color: #a32626; text-align: center; }
 .trip-card, .collapsed-trip { position: absolute; z-index: 10; left: 24px; top: 24px; width: min(520px, calc(100% - 48px)); }
@@ -85,7 +85,7 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .suggestions button span { color: var(--mfu-red); font-size: 10px; }
 .suggestions button span.favorite { color: var(--mfu-red); font-size: 14px; }
 .suggestions p { margin: 0; padding: 12px; color: #777; font-size: 13px; text-align: center; }
-.collapsed-trip { display: grid; grid-template-columns: 34px minmax(0, 1fr) 20px; align-items: center; gap: 14px; min-height: 54px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 18px; background: rgba(255,255,255,.97); color: #555; font-size: 14px; }
+.collapsed-trip { display: grid; grid-template-columns: minmax(0, 1fr) 20px; align-items: center; gap: 14px; min-height: 54px; padding: 10px 14px; border: 1px solid var(--border); border-radius: 18px; background: rgba(255,255,255,.97); color: #555; font-size: 14px; }
 .collapsed-trip strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .collapsed-trip strong span { color: var(--mfu-red); padding: 0 5px; }
 .trip-estimate { position: absolute; z-index: 10; left: 50%; top: 82px; width: min(360px, calc(100% - 32px)); transform: translateX(-50%); padding: 14px 15px 11px; border: 1px solid #e7e7e7; border-radius: 18px; background: rgba(255,255,255,.98); color: var(--ink); box-shadow: 0 8px 22px rgba(0,0,0,.16); }
@@ -343,7 +343,7 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 }
 
 .screen { min-height: calc(100vh - 48px); }
-.home-screen { height: calc(100vh - 48px); }
+.home-screen { height: calc(100vh - 48px); height: calc(100dvh - 48px); }
 .menu-btn { width: 32px; height: 32px; gap: 3px; padding: 0; }
 .menu-btn span { width: 20px; height: 2px; border-radius: 999px; }
 .language-btn { width: 34px; min-width: 34px; height: 34px; }
@@ -353,7 +353,7 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 @media (max-width: 700px) {
   .app-header { min-height: 48px; height: 48px; padding: 6px 18px; }
   .screen { min-height: calc(100vh - 48px); }
-  .home-screen { height: calc(100vh - 48px); }
+  .home-screen { height: calc(100vh - 48px); height: calc(100dvh - 48px); }
   .wordmark { font-size: 20px; }
   .language-btn img { width: 28px; height: 19px; }
   .menu-drawer { width: min(340px, 90vw); }
@@ -391,7 +391,7 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 }
 
 @media (max-width: 700px) {
-  .trip-card, .collapsed-trip { left: 12px; top: 12px; width: min(340px, calc(100% - 24px)); }
+  .trip-card, .collapsed-trip { left: 50%; top: 12px; width: calc(100% - 24px); max-width: 440px; transform: translateX(-50%); }
   .trip-card { grid-template-columns: 16px minmax(0, 1fr) 36px; gap: 7px; padding: 12px; }
   .suggestions { left: 77px; right: 55px; }
   .input-wrap input { min-height: 44px; font-size: 15px; }
@@ -412,4 +412,41 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 
 @media (max-width: 700px) {
   .suggestions { top: calc(100% + 6px); left: 0; right: 0; margin-top: 0; max-height: min(38vh, 280px); }
+}
+
+/* Fluid controls keep the map usable across phones, tablets, and desktops. */
+.app-header {
+  grid-template-columns: 40px minmax(0, 1fr) 40px;
+  padding-inline: clamp(8px, 3vw, 28px);
+}
+
+.wordmark {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: clamp(17px, 4.8vw, 20px);
+  text-overflow: clip;
+}
+
+.trip-card, .collapsed-trip {
+  width: min(440px, calc(100% - 32px));
+}
+
+.trip-estimate {
+  width: min(440px, calc(100% - 24px));
+}
+
+.line-selector {
+  width: clamp(138px, 40vw, 190px);
+}
+
+@media (max-width: 360px) {
+  .app-header { grid-template-columns: 32px minmax(0, 1fr) 32px; }
+  .wordmark { font-size: 16px; }
+  .trip-card { grid-template-columns: 14px minmax(0, 1fr) 32px; gap: 6px; padding: 10px; }
+  .trip-marker-column { grid-template-rows: 12px 34px 12px; }
+  .origin-marker, .destination-marker { width: 12px; height: 12px; }
+  .origin-marker { border-width: 3px; }
+  .input-wrap input { min-height: 42px; font-size: 14px; }
+  .icon-action { width: 30px; height: 30px; font-size: 17px; }
+  .collapsed-trip { gap: 8px; padding-inline: 12px; font-size: 13px; }
 }
