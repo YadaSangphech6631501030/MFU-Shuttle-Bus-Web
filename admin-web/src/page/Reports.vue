@@ -526,13 +526,13 @@ const reportGroups = computed(() => {
             </span>
             <div v-if="isDatePickerOpen" class="report-calendar-popover" @click.stop>
               <div class="report-calendar-header">
-                <button type="button" aria-label="Previous month" @click="shiftCalendarMonth(-1)">
+                <button type="button" :aria-label="text.previousMonth" @click="shiftCalendarMonth(-1)">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="m15 18-6-6 6-6" />
                   </svg>
                 </button>
                 <strong>{{ calendarMonthLabel }}</strong>
-                <button type="button" aria-label="Next month" @click="shiftCalendarMonth(1)">
+                <button type="button" :aria-label="text.nextMonth" @click="shiftCalendarMonth(1)">
                   <svg viewBox="0 0 24 24" aria-hidden="true">
                     <path d="m9 18 6-6-6-6" />
                   </svg>
@@ -560,8 +560,8 @@ const reportGroups = computed(() => {
                 </button>
               </div>
               <div class="report-calendar-footer">
-                <button type="button" @click="clearDateRange">Clear</button>
-                <button type="button" @click="closeDatePicker">Done</button>
+                <button type="button" @click="clearDateRange">{{ text.clear }}</button>
+                <button type="button" @click="closeDatePicker">{{ text.done }}</button>
               </div>
             </div>
           </span>

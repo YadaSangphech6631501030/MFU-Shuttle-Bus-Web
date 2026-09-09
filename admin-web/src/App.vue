@@ -8,7 +8,7 @@ import StationCCTVPage from './page/StationCCTV.vue';
 import StationsPage from './page/Stations.vue';
 import RoutesPage from './page/Routes.vue';
 import UsersPage from './page/Users.vue';
-import type { AdminUserPayload, Bus, CrowdThresholds, DetectorStatus, Report, Station, User, ShuttleRoute } from './types';
+import type { AdminUserPayload, Bus, GpsStatus, CrowdThresholds, DetectorStatus, Report, Station, User, ShuttleRoute } from './types';
 import mfuLogoUrl from './assets/mfu_logo.png';
 
 type Lang = 'en' | 'th';
@@ -177,15 +177,31 @@ const dictionary = {
   en: {
     tabs: {
       dashboard: 'Dashboard',
-      crowd: 'Shuttle Bus Monitor',
-      stations: 'Station Setting',
+      crowd: 'Shuttle monitoring',
+      stations: 'Station settings',
       routes: 'Routes',
-      cctv: 'Station CCTV',
+      cctv: 'Station cameras',
       buses: 'Buses',
       reports: 'Reports',
       users: 'Users',
     },
     language: 'EN',
+    stationId: 'Station ID',
+    stationNameEN: 'English station name',
+    actions: 'Actions',
+    previousMonth: 'Previous month',
+    nextMonth: 'Next month',
+    done: 'Done',
+    toggleSidebar: 'Toggle navigation',
+    noStations: 'No stations available',
+    noStationsHint: 'Add a station to begin configuring service locations.',
+    noBuses: 'No shuttle information available',
+    noUsers: 'No user accounts available',
+    addAdmin: 'Add administrator',
+    createAdmin: 'Create administrator account',
+    creatingAdmin: 'Creating account...',
+    adminPassword: 'Password',
+    passwordHint: 'At least 6 characters',
     loginSubtitle: '',
     username: 'Username',
     password: 'Password',
@@ -205,7 +221,7 @@ const dictionary = {
     signedInUser: 'Admin user',
     refresh: 'Refresh data',
     loading: 'Loading...',
-    genericError: 'Something went wrong',
+    genericError: 'Unable to complete the request. Please try again.',
     adminOnlyError: 'This account is not an administrator.',
     sessionExpired: 'Your session expired. Please sign in again.',
     totalStations: 'Total stations',
@@ -257,7 +273,7 @@ const dictionary = {
     reportDetailLabel: 'Detail',
     activeReports: 'Active reports',
     feedbackReports: 'Feedback',
-    historyReports: 'History report',
+    historyReports: 'Report history',
     reportViewLabel: 'Report view',
     reportSearch: 'Search',
     reportSearchPlaceholder: 'Search title, detail, location...',
@@ -309,27 +325,27 @@ const dictionary = {
     stationsNeedAttention: '{count} stations need attention',
     passengersWaitingAt: '{level} · {count} passengers waiting at {line}',
     noNotifications: 'No notifications',
-    busesDescription: 'Monitor shuttle availability by online and offline status.',
+    busesDescription: 'Track vehicle positions, movement and the latest GPS timestamps.',
     online: 'Online',
     offline: 'Offline',
     offlineBuses: 'Offline buses',
     total: 'Total',
-    totalBus: 'Total bus',
+    totalBus: 'Total buses',
     busesUnit: 'buses',
     busPrefix: 'Bus',
     reportsUnit: 'reports',
-    pendingStatus: 'pending',
-    inProgressStatus: 'in progress',
-    resolvedStatus: 'resolved',
+    pendingStatus: 'Pending',
+    inProgressStatus: 'In progress',
+    resolvedStatus: 'Resolved',
     usernameLabel: 'Username',
     emailLabel: 'Email',
     roleLabel: 'Role',
-    userRole: 'user',
-    adminRole: 'admin',
+    userRole: 'User',
+    adminRole: 'Administrator',
     stationsUnit: 'stations',
     camera: 'Camera',
-    connect: 'Connect',
-    noConnect: 'No Connect',
+    connect: 'Configured',
+    noConnect: 'Not configured',
     latitude: 'Latitude',
     longitude: 'Longitude',
     line1: 'Line 1',
@@ -346,16 +362,16 @@ const dictionary = {
     noCameraSource: 'No camera source',
     previewUnavailable: 'Preview unavailable',
     waitingFirstFrame: 'Waiting for the first detected frame...',
-    startRtspHint: 'Press Start Detection to read RTSP on the backend and show detected frames here.',
+    startRtspHint: 'Select Start detection to display the camera feed with detection results.',
     editCameraFirst: 'Edit this station and save a Camera URL first.',
     browserPreviewUnavailable: 'This link is saved, but it is not a browser-playable stream.',
     cameraSource: 'Camera source',
-    drawDetectionArea: 'Draw Detection Area',
-    saveArea: 'Save Area',
+    drawDetectionArea: 'Set detection area',
+    saveArea: 'Save area',
     clear: 'Clear',
     fullFrame: 'Full frame',
-    startDetection: 'Start Detection',
-    stopDetection: 'Stop Detection',
+    startDetection: 'Start detection',
+    stopDetection: 'Stop detection',
     starting: 'Starting...',
     stopping: 'Stopping...',
     detectorRunning: 'Detector running',
@@ -365,15 +381,31 @@ const dictionary = {
   th: {
     tabs: {
       dashboard: 'ภาพรวม',
-      crowd: 'Shuttle Bus Monitor',
-      stations: 'Station Setting',
+      crowd: 'ติดตามรถรับส่ง',
+      stations: 'ตั้งค่าสถานี',
       routes: 'เส้นทางรถ',
-      cctv: 'Station CCTV',
+      cctv: 'กล้องประจำสถานี',
       buses: 'รถทั้งหมด',
       reports: 'รายงาน',
       users: 'ผู้ใช้',
     },
     language: 'TH',
+    stationId: 'รหัสสถานี',
+    stationNameEN: 'ชื่อสถานีภาษาอังกฤษ',
+    actions: 'การดำเนินการ',
+    previousMonth: 'เดือนก่อนหน้า',
+    nextMonth: 'เดือนถัดไป',
+    done: 'เสร็จสิ้น',
+    toggleSidebar: 'ย่อหรือขยายเมนู',
+    noStations: 'ยังไม่มีข้อมูลสถานี',
+    noStationsHint: 'เพิ่มสถานีเพื่อเริ่มกำหนดจุดให้บริการ',
+    noBuses: 'ยังไม่มีข้อมูลรถรับส่ง',
+    noUsers: 'ยังไม่มีบัญชีผู้ใช้',
+    addAdmin: 'เพิ่มผู้ดูแลระบบ',
+    createAdmin: 'สร้างบัญชีผู้ดูแลระบบ',
+    creatingAdmin: 'กำลังสร้างบัญชี...',
+    adminPassword: 'รหัสผ่าน',
+    passwordHint: 'อย่างน้อย 6 ตัวอักษร',
     loginSubtitle: '',
     username: 'ชื่อผู้ใช้',
     password: 'รหัสผ่าน',
@@ -391,9 +423,9 @@ const dictionary = {
     logout: 'ออกจากระบบ',
     profileInformation: 'ข้อมูลโปรไฟล์',
     signedInUser: 'ผู้ดูแลระบบ',
-    refresh: 'รีเฟรชข้อมูล',
+    refresh: 'โหลดข้อมูลล่าสุด',
     loading: 'กำลังโหลด...',
-    genericError: 'เกิดข้อผิดพลาด',
+    genericError: 'ไม่สามารถดำเนินการได้ กรุณาลองอีกครั้ง',
     adminOnlyError: 'บัญชีนี้ไม่ใช่ผู้ดูแลระบบ',
     sessionExpired: 'เซสชันหมดอายุ กรุณาเข้าสู่ระบบใหม่',
     totalStations: 'สถานีทั้งหมด',
@@ -419,7 +451,7 @@ const dictionary = {
     stationNamePlaceholder: 'ชื่อจุดจอด',
     stationNameTHPlaceholder: 'ชื่อจุดจอดภาษาไทย',
     mapPicker: 'เลือกตำแหน่งจากแผนที่',
-    mapHint: 'คลิกบนแผนที่หรือลากหมุดเพื่ออัปเดต latitude และ longitude',
+    mapHint: 'คลิกบนแผนที่หรือลากหมุดเพื่อปรับพิกัดละติจูดและลองจิจูด',
     mapMissingKey: 'เพิ่ม VITE_GOOGLE_MAPS_API_KEY ใน admin-web/.env เพื่อเปิดใช้ Google Map',
     mapAuthFailed: 'Google Maps API key ใช้งานไม่ได้หรือถูกบล็อก กรุณาตรวจสอบ Billing, Maps JavaScript API และ HTTP referrer ใน Google Cloud',
     mapLoadFailed: 'โหลด Google Map ไม่สำเร็จ',
@@ -431,7 +463,7 @@ const dictionary = {
     editStationConfirm: 'บันทึกการแก้ไขสถานี "{name}" ใช่ไหม?',
     allBuses: 'รถทั้งหมด',
     unknownBus: 'ไม่ระบุรถ',
-    noDriver: 'ไม่มีชื่อคนขับ',
+    noDriver: 'ยังไม่ระบุผู้ขับขี่',
     noLine: 'ไม่ระบุสาย',
     issueReports: 'รายงานปัญหา',
     issueReportsHint: 'ตรวจสอบรายงานจากผู้โดยสารและอัปเดตสถานะ',
@@ -439,12 +471,12 @@ const dictionary = {
     anonymous: 'ไม่ระบุชื่อ',
     guestUser: 'ผู้ใช้ทั่วไป',
     guestUserInitial: 'G',
-    guestReportMeta: 'รายงานแบบ Guest ไม่ผูกกับบัญชีผู้ใช้',
+    guestReportMeta: 'รายงานจากผู้ใช้ทั่วไปที่ไม่ได้เข้าสู่ระบบ',
     reportedBy: 'ผู้แจ้ง',
     reportTitleLabel: 'หัวข้อ',
     reportDetailLabel: 'รายละเอียด',
     activeReports: 'รายงานที่ต้องดำเนินการ',
-    feedbackReports: 'ติชม',
+    feedbackReports: 'ข้อเสนอแนะ',
     historyReports: 'ประวัติรายงาน',
     reportViewLabel: 'มุมมองรายงาน',
     reportSearch: 'ค้นหา',
@@ -457,14 +489,14 @@ const dictionary = {
     reportDateFromShort: 'จาก',
     reportDateToShort: 'ถึง',
     to: 'ถึง',
-    reportActions: 'จัดการ',
+    reportActions: 'การดำเนินการ',
     deleteReport: 'ลบรายงาน',
     deleteReportConfirm: 'ลบรายงาน "{name}" ใช่ไหม?',
     feedbackAverage: 'เฉลี่ย',
     allCategories: 'ทุกหมวดหมู่',
     allStatuses: 'ทุกสถานะ',
     noFilteredReports: 'ไม่พบรายงานตามตัวกรอง',
-    noFilteredReportsHint: 'ลองปรับคำค้นหา หมวดหมู่ หรือสถานะ',
+    noFilteredReportsHint: 'กรุณาปรับคำค้นหา หมวดหมู่ หรือสถานะที่เลือก',
     reportUserId: 'รหัสผู้ใช้',
     reportUserUnknown: 'ไม่มีข้อมูลผู้ใช้',
     submittedAt: 'เวลาที่ส่ง',
@@ -479,7 +511,7 @@ const dictionary = {
     changeRole: 'เปลี่ยนสิทธิ์',
     deleteStationConfirm: 'ลบสถานี "{name}" ใช่ไหม?',
     deleteUserConfirm: 'ลบผู้ใช้ "{name}" ใช่ไหม?',
-    adminDashboard: 'แดชบอร์ดผู้ดูแล',
+    adminDashboard: 'ระบบบริหารจัดการรถรับส่ง',
     crowdStatus: 'สถานะความหนาแน่น',
     high: 'สูง',
     medium: 'ปานกลาง',
@@ -490,14 +522,14 @@ const dictionary = {
     markerColorHint: 'สีหมุดแสดงระดับความหนาแน่นของสถานี',
     dispatchGuide: 'คำแนะนำการจัดรถ',
     highAdvice: 'ควรพิจารณาเพิ่มรถรับส่ง',
-    mediumAdvice: 'ควรติดตามสถานีนี้ต่อ',
-    lowAdvice: 'การไหลของผู้โดยสารอยู่ในระดับปกติ',
+    mediumAdvice: 'ควรติดตามจำนวนผู้โดยสารที่สถานีนี้อย่างต่อเนื่อง',
+    lowAdvice: 'จำนวนผู้โดยสารอยู่ในระดับปกติ',
     crowdAlerts: 'แจ้งเตือนความหนาแน่น',
     notifications: 'การแจ้งเตือน',
     stationsNeedAttention: '{count} สถานีต้องตรวจสอบ',
     passengersWaitingAt: '{level} · ผู้โดยสาร {count} คนรออยู่ที่ {line}',
     noNotifications: 'ไม่มีการแจ้งเตือน',
-    busesDescription: 'ตรวจสอบความพร้อมใช้งานของรถตามสถานะออนไลน์และออฟไลน์',
+    busesDescription: 'ติดตามพิกัด การเคลื่อนที่ และเวลาข้อมูล GPS ล่าสุดของรถ',
     online: 'ออนไลน์',
     offline: 'ออฟไลน์',
     offlineBuses: 'รถออฟไลน์',
@@ -513,19 +545,19 @@ const dictionary = {
     emailLabel: 'อีเมล',
     roleLabel: 'สิทธิ์',
     userRole: 'ผู้ใช้',
-    adminRole: 'ผู้ดูแล',
+    adminRole: 'ผู้ดูแลระบบ',
     stationsUnit: 'สถานี',
     camera: 'กล้อง',
-    connect: 'เชื่อมต่อ',
-    noConnect: 'ไม่เชื่อมต่อ',
+    connect: 'ตั้งค่าแล้ว',
+    noConnect: 'ยังไม่ได้ตั้งค่า',
     latitude: 'ละติจูด',
     longitude: 'ลองจิจูด',
     line1: 'สาย 1',
     line2: 'สาย 2',
-    cameraUrl: 'URL กล้อง',
+    cameraUrl: 'ที่อยู่สัญญาณกล้อง (URL)',
     detectionRoi: 'พื้นที่ตรวจจับ',
     camerasUnit: 'กล้อง',
-    ready: 'พร้อม',
+    ready: 'ตั้งค่าแล้ว',
     noCamera: 'ไม่มีกล้อง',
     configured: 'ตั้งค่าแล้ว',
     stationCamera: 'กล้องสถานี',
@@ -534,11 +566,11 @@ const dictionary = {
     noCameraSource: 'ไม่มีแหล่งสัญญาณกล้อง',
     previewUnavailable: 'ไม่สามารถแสดงตัวอย่างได้',
     waitingFirstFrame: 'กำลังรอภาพตรวจจับแรก...',
-    startRtspHint: 'กด Start Detection เพื่ออ่าน RTSP ที่ backend และแสดงภาพตรวจจับที่นี่',
-    editCameraFirst: 'แก้ไขสถานีและบันทึก Camera URL ก่อน',
+    startRtspHint: 'เลือกเริ่มตรวจจับเพื่อแสดงภาพจากกล้องพร้อมผลการตรวจจับ',
+    editCameraFirst: 'กรุณากำหนดที่อยู่สัญญาณกล้องในหน้าตั้งค่าสถานีก่อน',
     browserPreviewUnavailable: 'ลิงก์นี้ถูกบันทึกแล้ว แต่เบราว์เซอร์ไม่สามารถเปิดเป็นสตรีมได้',
     cameraSource: 'แหล่งสัญญาณกล้อง',
-    drawDetectionArea: 'วาดพื้นที่ตรวจจับ',
+    drawDetectionArea: 'กำหนดพื้นที่ตรวจจับ',
     saveArea: 'บันทึกพื้นที่',
     clear: 'ล้าง',
     fullFrame: 'เต็มภาพ',
@@ -607,6 +639,10 @@ function routeSaved(route: ShuttleRoute) {
   routes.value = [...routes.value.filter(item => item.id !== route.id), route].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
 }
 const buses = ref<Bus[]>([]);
+const gpsStatus = ref<GpsStatus | null>(null);
+const gpsLoadFailed = ref(false);
+let busRefreshTimer: number | undefined;
+let busRefreshBusy = false;
 const reports = ref<Report[]>([]);
 const users = ref<User[]>([]);
 
@@ -680,7 +716,7 @@ function isFeedbackReport(report: Report) {
   return reportType === 'feedback' || reportType === 'ติชม' || reportType === 'ข้อเสนอแนะ' || reportType === 'ส่งข้อเสนอแนะ';
 }
 
-const onlineBuses = computed(() => buses.value.filter((bus) => bus.status?.toLowerCase() !== 'offline').length);
+const onlineBuses = computed(() => buses.value.filter((bus) => bus.connectionStatus === 'fresh' && bus.feedHealthy).length);
 const pendingReports = computed(() => reports.value
   .filter((report) => !isFeedbackReport(report))
   .filter((report) => report.status !== 'resolved').length);
@@ -961,6 +997,9 @@ function isAuthTokenError(err: unknown) {
 }
 
 function resetSession() {
+  buses.value = [];
+  gpsStatus.value = null;
+  gpsLoadFailed.value = false;
   api.clearSession();
   localStorage.removeItem(USERNAME_KEY);
   currentUsername.value = '';
@@ -1379,10 +1418,10 @@ async function withLoading(task: () => Promise<void>) {
 }
 
 async function loadData() {
+  void refreshBuses();
   await withLoading(async () => {
-    const [stationData, busData, reportData, userData, routeData] = await Promise.all([
+    const [stationData, reportData, userData, routeData] = await Promise.all([
       api.getStations(),
-      api.getBuses(),
       api.getReports(),
       api.getUsers(),
       api.getRoutes(),
@@ -1391,10 +1430,28 @@ async function loadData() {
     stations.value = stationData;
     routes.value = routeData;
     syncSelectedCameraStation(stationData);
-    buses.value = busData;
     reports.value = reportData;
     users.value = userData;
   });
+}
+
+async function refreshBuses() {
+  if (!isLoggedIn.value || busRefreshBusy) return;
+  busRefreshBusy = true;
+  const session = api.token;
+  try {
+    const [busData, status] = await Promise.all([api.getBuses(), api.getGpsStatus()]);
+    if (api.token !== session || !isLoggedIn.value) return;
+    buses.value = busData;
+    gpsStatus.value = status;
+    gpsLoadFailed.value = false;
+  } catch {
+    if (api.token !== session || !isLoggedIn.value) return;
+    gpsLoadFailed.value = true;
+    buses.value = buses.value.map(bus => ({ ...bus, connectionStatus: 'unknown', feedHealthy: false }));
+  } finally {
+    busRefreshBusy = false;
+  }
 }
 
 async function refreshReportsSilently() {
@@ -1533,6 +1590,7 @@ async function deleteUser(user: User) {
 }
 
 onMounted(() => {
+  busRefreshTimer = window.setInterval(() => { void refreshBuses(); }, 5000);
   document.addEventListener('click', closeUserMenu);
   if (isLoggedIn.value) {
     void loadData();
@@ -1560,6 +1618,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  window.clearInterval(busRefreshTimer);
   document.removeEventListener('click', closeUserMenu);
   if (detectorStatusTimer) {
     window.clearInterval(detectorStatusTimer);
@@ -1729,7 +1788,7 @@ watch(selectedCameraStationId, () => {
 
     <section class="content">
       <header class="topbar">
-        <button class="sidebar-toggle" type="button" aria-label="Toggle sidebar" @click="toggleSidebar">
+        <button class="sidebar-toggle" type="button" :aria-label="text.toggleSidebar" @click="toggleSidebar">
           <span></span>
           <span></span>
           <span></span>
@@ -1832,6 +1891,9 @@ watch(selectedCameraStationId, () => {
         :crowd-map-loading="crowdMapLoading"
         :crowd-thresholds="crowdThresholds"
         :online-buses="onlineBuses"
+        :gps-load-failed="gpsLoadFailed"
+        :gps-status="gpsStatus"
+        :lang="lang"
         :pending-reports="pendingReports"
         :selected-station-id="selectedCrowdStationId"
         :stations="stations"
@@ -1900,6 +1962,9 @@ watch(selectedCameraStationId, () => {
         v-if="activeTab === 'buses'"
         :buses="buses"
         :text="text"
+        :gps-status="gpsStatus"
+        :load-failed="gpsLoadFailed"
+        :lang="lang"
       />
 
       <ReportsPage
