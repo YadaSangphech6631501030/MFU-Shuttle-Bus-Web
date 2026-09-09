@@ -90,7 +90,11 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .collapsed-trip strong span { color: var(--mfu-red); padding: 0 5px; }
 .trip-estimate { position: absolute; z-index: 10; left: 50%; top: 82px; width: min(360px, calc(100% - 32px)); transform: translateX(-50%); padding: 14px 15px 11px; border: 1px solid #e7e7e7; border-radius: 18px; background: rgba(255,255,255,.98); color: var(--ink); box-shadow: 0 8px 22px rgba(0,0,0,.16); }
 .trip-estimate-head { display: grid; gap: 4px; margin-bottom: 8px; padding-bottom: 8px; border-bottom: 1px solid #f0f0f0; }
+.trip-estimate-title { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .trip-estimate-head strong { font-size: 16px; font-weight: 800; }
+.trip-estimate-close { display: grid; width: 26px; height: 26px; flex: 0 0 auto; place-items: center; border: 0; border-radius: 50%; background: transparent; color: #777; cursor: pointer; font-size: 22px; line-height: 1; }
+.trip-estimate-close:hover { background: rgba(210,35,42,.1); color: var(--mfu-red); }
+.trip-estimate-close:focus-visible { outline: 2px solid var(--mfu-red); outline-offset: 2px; }
 .trip-estimate-head span { overflow: hidden; color: #777; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .trip-estimate-head span b { color: var(--mfu-red); padding: 0 4px; }
 .trip-estimate-row { display: grid; grid-template-columns: 28px minmax(0, 1fr) auto; align-items: center; gap: 8px; min-height: 35px; }
