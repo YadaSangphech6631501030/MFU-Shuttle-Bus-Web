@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Collects feedback directly on the page instead of opening a modal.
-import { reactive, ref } from 'vue';
+import { computed, reactive, ref } from 'vue';
 
 type FeedbackPayload = {
   name: string;
@@ -18,19 +18,29 @@ const form = reactive<FeedbackPayload>({
   ratings: [0, 0, 0, 0, 0],
 });
 const hoverRatings = reactive([0, 0, 0, 0, 0]);
-const fieldErrors = reactive({ name: false, email: false });
-const ratingError = ref(false);
+// Show validation warnings only after the first submission attempt.
+const hasSubmitted = ref(false);
+// Recompute warnings as the user types so corrected fields clear immediately.
+const fieldErrors = computed(() => ({
+  name: hasSubmitted.value && !form.name.trim(),
+  email: hasSubmitted.value && !isValidEmail(form.email.trim()),
+}));
+// Clear the rating warning automatically once every question has a score.
+const ratingError = computed(() =>
+  hasSubmitted.value && form.ratings.some((rating) => rating === 0),
+);
 
 function isValidEmail(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
 function submitForm() {
-  ratingError.value = form.ratings.some((rating) => rating === 0);
-  fieldErrors.name = !form.name;
-  fieldErrors.email = !form.email || !isValidEmail(form.email);
-  if (fieldErrors.name || fieldErrors.email || ratingError.value) return;
-  emit('submit', { ...form });
+  // Ignore repeated submissions while the current request is pending.
+  if (props.isSubmitting) return;
+  hasSubmitted.value = true;
+  if (fieldErrors.value.name || fieldErrors.value.email || ratingError.value) return;
+  // Copy the ratings so later form edits cannot change the submitted payload.
+  emit('submit', { ...form, ratings: [...form.ratings] });
 }
 </script>
 
@@ -54,7 +64,7 @@ function submitForm() {
               <circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8" />
               <path d="M5.5 20a6.5 6.5 0 0 1 13 0" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="1.8" />
             </svg>
-            <input v-model.trim="form.name" type="text" autocomplete="name" :placeholder="props.t.feedbackNamePlaceholder" :aria-invalid="fieldErrors.name" @input="fieldErrors.name = false" />
+            <input v-model.trim="form.name" type="text" autocomplete="name" :placeholder="props.t.feedbackNamePlaceholder" :aria-invalid="fieldErrors.name" />
           </span>
           <small v-if="fieldErrors.name" class="feedback-error">{{ props.t.required }}</small>
         </label>
@@ -65,7 +75,7 @@ function submitForm() {
               <rect x="3.5" y="5.5" width="17" height="13" rx="2" fill="none" stroke="currentColor" stroke-width="1.8" />
               <path d="m5 7 7 5 7-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8" />
             </svg>
-            <input v-model.trim="form.email" type="email" autocomplete="email" :placeholder="props.t.feedbackEmailPlaceholder" :aria-invalid="fieldErrors.email" @input="fieldErrors.email = false" />
+            <input v-model.trim="form.email" type="email" autocomplete="email" :placeholder="props.t.feedbackEmailPlaceholder" :aria-invalid="fieldErrors.email" />
           </span>
           <small v-if="fieldErrors.email" class="feedback-error">{{ props.t.required }}</small>
         </label>
