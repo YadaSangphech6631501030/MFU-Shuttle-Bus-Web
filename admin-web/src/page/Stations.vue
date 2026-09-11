@@ -117,14 +117,15 @@ watch(
         <table>
           <thead>
             <tr>
-              <th>ID</th>
+              <th>{{ text.stationId }}</th>
               <th>{{ text.stationName }}</th>
               <th>{{ text.line }}</th>
               <th>{{ text.camera }}</th>
-              <th></th>
+              <th class="actions">{{ text.actions }}</th>
             </tr>
           </thead>
           <tbody>
+            <tr v-if="!stations.length"><td colspan="5" class="function-empty-state">{{ text.noStations }}<small>{{ text.noStationsHint }}</small></td></tr>
             <tr v-for="station in stations" :key="station._id || station.id">
               <td>{{ station.id }}</td>
               <td>{{ stationDisplayName(station) }}</td>
@@ -151,8 +152,8 @@ watch(
           <button class="link-btn" type="button" @click="() => closeStationModal()">{{ text.cancel }}</button>
         </div>
         <form class="station-form" @submit.prevent="saveStation">
-          <label>ID <input v-model="stationForm.id" required :placeholder="text.stationIdPlaceholder" /></label>
-          <label>{{ text.stationName }} <input v-model="stationForm.name" required :placeholder="text.stationNamePlaceholder" /></label>
+          <label>{{ text.stationId }} <input v-model="stationForm.id" required :placeholder="text.stationIdPlaceholder" /></label>
+          <label>{{ text.stationNameEN }} <input v-model="stationForm.name" required :placeholder="text.stationNamePlaceholder" /></label>
           <label>{{ text.stationNameTH }} <input v-model="stationForm.nameTH" :placeholder="text.stationNameTHPlaceholder" /></label>
           <div class="split">
             <label>{{ text.latitude }} <input v-model.number="stationForm.lat" required type="number" step="any" /></label>

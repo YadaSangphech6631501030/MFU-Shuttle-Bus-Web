@@ -1,11 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import type { Bus, CrowdThresholds, Station } from '../types';
+import type { Bus, GpsStatus, CrowdThresholds, Station } from '../types';
+import GpsNotice from '../components/GpsStatus.vue';
 
 type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 const props = defineProps<{
   buses: Bus[];
+  gpsStatus: GpsStatus | null;
+  gpsLoadFailed: boolean;
+  lang: 'th' | 'en';
   crowdMapError: string;
   crowdMapLoading: boolean;
   crowdThresholds: CrowdThresholds;
@@ -78,10 +82,11 @@ onUnmounted(() => {
     <header class="dashboard-page-header">
       <div>
         <p class="eyebrow">{{ text.adminDashboard }}</p>
-        <h1>Dashboard</h1>
+        <h1>{{ text.tabs.dashboard }}</h1>
       </div>
     </header>
 
+    <GpsNotice :status="gpsStatus" :load-failed="gpsLoadFailed" :lang="lang" />
     <section class="dashboard-metric-grid">
       <article class="dashboard-metric-card metric-rose">
         <div>
@@ -98,7 +103,7 @@ onUnmounted(() => {
 
       <article class="dashboard-metric-card metric-blue">
         <div>
-          <span>{{ text.onlineBuses }}</span>
+          <span>{{ lang === 'th' ? 'รถที่มีข้อมูล GPS ล่าสุด' : 'Buses with fresh GPS data' }}</span>
           <strong>{{ onlineBuses }}</strong>
           <small>{{ fillTemplate(text.fromTotalBuses, { count: buses.length }) }}</small>
         </div>

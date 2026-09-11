@@ -1,4 +1,4 @@
-import type { AdminUserPayload, Bus, DetectorStatus, LoginResponse, Report, Station, User, ShuttleRoute } from '../types';
+import type { AdminUserPayload, Bus, GpsStatus, DetectorStatus, LoginResponse, Report, Station, User, ShuttleRoute } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5101';
 const TOKEN_KEY = 'mfu_admin_token';
@@ -133,7 +133,11 @@ export const api = {
   },
 
   getBuses() {
-    return request<Bus[]>('/api/buses');
+    return request<Bus[]>('/api/buses', { signal: AbortSignal.timeout(12000) });
+  },
+
+  getGpsStatus() {
+    return request<GpsStatus>('/api/buses/gps-status', { auth: true, signal: AbortSignal.timeout(12000) });
   },
 
   getReports() {

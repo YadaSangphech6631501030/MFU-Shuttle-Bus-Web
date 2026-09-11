@@ -64,7 +64,7 @@ function submitAdmin() {
 </script>
 
 <template>
-  <div>
+  <div class="users-page">
     <section class="panel">
       <div class="panel-heading">
         <div class="panel-title-group">
@@ -82,10 +82,11 @@ function submitAdmin() {
               <th>{{ text.usernameLabel }}</th>
               <th>{{ text.emailLabel }}</th>
               <th>{{ text.roleLabel }}</th>
-              <th></th>
+              <th class="actions">{{ text.actions }}</th>
             </tr>
           </thead>
           <tbody>
+            <tr v-if="!users.length"><td colspan="4" class="function-empty-state">{{ text.noUsers }}</td></tr>
             <tr v-for="user in users" :key="user._id || user.username">
               <td>{{ user.username }}</td>
               <td>{{ user.email || '-' }}</td>
