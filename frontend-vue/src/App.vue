@@ -49,6 +49,8 @@ const favoriteSearch = ref('');
 const confirmStation = ref<Station | null>(null);
 const stationDetail = ref<Station | null>(null);
 const successModal = ref(false);
+let successModalTimer: ReturnType<typeof setTimeout> | undefined;
+const feedbackFormVersion = ref(0);
 const isFeedbackSubmitting = ref(false);
 const mapElement = ref<HTMLElement | null>(null);
 const selectedRouteAvailable = ref(false);
@@ -245,12 +247,22 @@ function confirmRemoveFavorite() {
 type FeedbackPayload = { name: string; email: string; ratings: number[] };
 
 async function submitFeedback(payload: FeedbackPayload) {
+  if (isFeedbackSubmitting.value) return;
   isFeedbackSubmitting.value = true;
+  message.value = "";
   try {
     const detail = [`Name: ${payload.name}`, `Email: ${payload.email}`, ...payload.ratings.map((rating, index) => `${t.value.ratingQuestions[index]}: ${rating}/5`)].join('\n');
     await api.sendReport('Feedback', detail, '-');
+    // Remount the keyed form only after success to reset fields, ratings, and warnings.
+    feedbackFormVersion.value += 1;
     successModal.value = true;
+    // Replace any previous timer and dismiss the confirmation after 2.5 seconds.
+    clearTimeout(successModalTimer);
+    successModalTimer = setTimeout(() => {
+      successModal.value = false;
+    }, 2500);
   } catch (error) {
+    // Preserve the form on failure so the user can retry without re-entering data.
     message.value = error instanceof Error ? error.message : t.value.mapLoadFailed;
   } finally {
     isFeedbackSubmitting.value = false;
@@ -560,7 +572,10 @@ async function ensureHomeMap() {
 }
 async function loadData() { isLoading.value = true; message.value = ''; try { const [line1, line2, busList] = await Promise.all([api.getStations('line1'), api.getStations('line2'), api.getBuses().catch(() => [])]); const stationMap = new Map<string, Station>(); [...line1, ...line2].forEach((station) => { const old = stationMap.get(station.id); stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station); }); stations.value = [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); buses.value = busList; } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
 onMounted(async () => { await loadData(); await initGoogleMap(); });
-onBeforeUnmount(() => mapResizeObserver?.disconnect());
+onBeforeUnmount(() => {
+  mapResizeObserver?.disconnect();
+  clearTimeout(successModalTimer);
+});
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
 watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
   selectedRouteAvailable.value = false;
@@ -609,7 +624,7 @@ watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
     <!-- Favorites page: manage saved stations. -->
     <FavoritesPage v-else-if="page === 'favorites'" :t="t" :favorite-stations="favoriteStations" :station-name="stationName" @add="showStationPicker = true" @remove="askRemoveFavorite" />
     <!-- Feedback page: submit a complete feedback form directly. -->
-    <FeedbackPage v-else-if="page === 'report'" :t="t" :is-submitting="isFeedbackSubmitting" @submit="submitFeedback" />
+    <FeedbackPage v-else-if="page === 'report'" :key="feedbackFormVersion" :t="t" :is-submitting="isFeedbackSubmitting" @submit="submitFeedback" />
     <!-- Settings page: navigate to transit, favorites, feedback, and language. -->
     <SettingsPage v-else-if="page === 'settings'" :t="t" :language-label="lang === 'th' ? t.languageThai : t.languageEnglish" @open="openPage" />
     <!-- Language page: choose Thai or English. -->
@@ -617,6 +632,19 @@ watch([selectedLine, stations, buses, selectedFromId, selectedToId], () => {
     <div v-if="showStationPicker" class="modal-backdrop" @click.self="showStationPicker = false">
     <section class="picker-modal"><div class="modal-head"><h2>{{ t.searchStation }}</h2><button type="button" @click="showStationPicker = false">×</button></div><div class="list-search"><svg class="search-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.8" cy="10.8" r="6.2" fill="none" stroke="currentColor" stroke-width="2" /><path d="m15.5 15.5 5 5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-width="2" /></svg><input v-model="favoriteSearch" autofocus :placeholder="t.findStation" /></div><div class="picker-list"><button v-for="station in favoriteMatches" :key="station.id" type="button" @click="toggleFavorite(station.id); showStationPicker = false"><span>{{ stationName(station) }}</span><span v-if="favoriteIds.includes(station.id)" class="picker-favorite-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M20.8 8.8c0 5.2-8.8 10.2-8.8 10.2S3.2 14 3.2 8.8A4.8 4.8 0 0 1 12 6.2a4.8 4.8 0 0 1 8.8 2.6Z" /></svg></span><b v-else>+</b></button><p v-if="!favoriteMatches.length" class="empty-state">{{ t.noStations }}</p></div></section></div>
     <div v-if="confirmStation" class="modal-backdrop" @click.self="confirmStation = null"><section class="confirm-modal"><h2>{{ t.remove }}</h2><p>{{ t.confirmRemove }}</p><strong>{{ stationName(confirmStation) }}</strong><div class="modal-actions"><button class="secondary-btn" type="button" @click="confirmStation = null">{{ t.cancel }}</button><button class="danger-btn" type="button" @click="confirmRemoveFavorite">{{ t.remove }}</button></div></section></div>
-    <div v-if="successModal" class="modal-backdrop" @click.self="successModal = false"><section class="success-modal"><span>✓</span><h2>{{ t.success }}</h2><p>{{ t.successText }}</p><button class="primary-btn" type="button" @click="successModal = false">{{ t.close }}</button></section></div>
+    <Transition name="feedback-success">
+      <div v-if="successModal" class="modal-backdrop feedback-success-backdrop">
+        <section class="success-modal" role="status" aria-live="polite" aria-atomic="true">
+          <span class="success-icon" aria-hidden="true">
+            <svg viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="18" stroke="currentColor" stroke-width="2" opacity=".25" />
+              <path d="m15 24 6 6 12-13" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round" />
+            </svg>
+          </span>
+          <h2>{{ t.success }}</h2>
+          <p>{{ t.successText }}</p>
+        </section>
+      </div>
+    </Transition>
   </section></main>
 </template>
