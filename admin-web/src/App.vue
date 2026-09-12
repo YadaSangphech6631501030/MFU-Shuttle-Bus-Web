@@ -171,7 +171,25 @@ const tabIcons: Record<TabKey, NavIcon> = {
   },
 };
 const sidebarTabs = computed(() => tabs.filter((tab) => tab.key !== 'users'));
-const activeTab = ref<TabKey>('dashboard');
+const ACTIVE_TAB_KEY = 'mfu_web_admin_active_tab';
+
+// Keep each browser tab on its current page after a refresh.
+function restoreActiveTab(): TabKey {
+  try {
+    const savedTab = sessionStorage.getItem(ACTIVE_TAB_KEY);
+    return tabs.find(tab => tab.key === savedTab)?.key ?? 'dashboard';
+  } catch {
+    return 'dashboard';
+  }
+}
+const activeTab = ref<TabKey>(restoreActiveTab());
+watch(activeTab, tab => {
+  try {
+    sessionStorage.setItem(ACTIVE_TAB_KEY, tab);
+  } catch {
+    // Navigation still works when browser storage is unavailable.
+  }
+}, { flush: 'sync' });
 
 const dictionary = {
   en: {
@@ -182,7 +200,7 @@ const dictionary = {
       routes: 'Routes',
       cctv: 'Station cameras',
       buses: 'Buses',
-      reports: 'Reports',
+      reports: 'Feedback',
       users: 'Users',
     },
     language: 'EN',
@@ -261,7 +279,7 @@ const dictionary = {
     unknownBus: 'Unknown bus',
     noDriver: 'No driver name',
     noLine: 'No line',
-    issueReports: 'Issue reports',
+    issueReports: 'Feedback',
     issueReportsHint: 'Review passenger issue reports and update their status.',
     issueReport: 'Issue report',
     anonymous: 'anonymous',
@@ -276,7 +294,7 @@ const dictionary = {
     historyReports: 'Report history',
     reportViewLabel: 'Report view',
     reportSearch: 'Search',
-    reportSearchPlaceholder: 'Search title, detail, location...',
+    reportSearchPlaceholder: 'Search feedback, name, email...',
     reportCategoryFilter: 'Category',
     reportStatusFilter: 'Status',
     reportDateRange: 'Date range',
@@ -286,13 +304,13 @@ const dictionary = {
     reportDateToShort: 'to',
     to: 'to',
     reportActions: 'Actions',
-    deleteReport: 'Delete report',
-    deleteReportConfirm: 'Delete report "{name}"?',
+    deleteReport: 'Delete feedback',
+    deleteReportConfirm: 'Delete feedback "{name}"?',
     feedbackAverage: 'Average',
     allCategories: 'All categories',
     allStatuses: 'All statuses',
-    noFilteredReports: 'No reports match filters',
-    noFilteredReportsHint: 'Adjust search, category, or status filters.',
+    noFilteredReports: 'No feedback matches filters',
+    noFilteredReportsHint: 'Adjust your search or date range.',
     reportUserId: 'User ID',
     reportUserUnknown: 'No user information',
     submittedAt: 'Submitted',
@@ -301,8 +319,8 @@ const dictionary = {
     noReportDetail: 'No report detail',
     noReportLocation: 'No location provided',
     unknownTime: 'No time recorded',
-    noReports: 'No issue reports',
-    noReportsHint: 'New passenger reports will appear here.',
+    noReports: 'No feedback yet',
+    noReportsHint: 'New passenger feedback will appear here.',
     systemUsers: 'System users',
     changeRole: 'Change role',
     deleteStationConfirm: 'Delete station "{name}"?',
@@ -333,7 +351,7 @@ const dictionary = {
     totalBus: 'Total buses',
     busesUnit: 'buses',
     busPrefix: 'Bus',
-    reportsUnit: 'reports',
+    reportsUnit: 'entries',
     pendingStatus: 'Pending',
     inProgressStatus: 'In progress',
     resolvedStatus: 'Resolved',
@@ -386,7 +404,7 @@ const dictionary = {
       routes: 'เส้นทางรถ',
       cctv: 'กล้องประจำสถานี',
       buses: 'รถทั้งหมด',
-      reports: 'รายงาน',
+      reports: 'ข้อเสนอแนะ',
       users: 'ผู้ใช้',
     },
     language: 'TH',
@@ -465,7 +483,7 @@ const dictionary = {
     unknownBus: 'ไม่ระบุรถ',
     noDriver: 'ยังไม่ระบุผู้ขับขี่',
     noLine: 'ไม่ระบุสาย',
-    issueReports: 'รายงานปัญหา',
+    issueReports: 'ข้อเสนอแนะ',
     issueReportsHint: 'ตรวจสอบรายงานจากผู้โดยสารและอัปเดตสถานะ',
     issueReport: 'รายงานปัญหา',
     anonymous: 'ไม่ระบุชื่อ',
@@ -480,7 +498,7 @@ const dictionary = {
     historyReports: 'ประวัติรายงาน',
     reportViewLabel: 'มุมมองรายงาน',
     reportSearch: 'ค้นหา',
-    reportSearchPlaceholder: 'ค้นหาหัวข้อ รายละเอียด ตำแหน่ง...',
+    reportSearchPlaceholder: 'ค้นหาข้อเสนอแนะ ชื่อ อีเมล...',
     reportCategoryFilter: 'หมวดหมู่',
     reportStatusFilter: 'สถานะ',
     reportDateRange: 'ช่วงวันที่',
@@ -490,13 +508,13 @@ const dictionary = {
     reportDateToShort: 'ถึง',
     to: 'ถึง',
     reportActions: 'การดำเนินการ',
-    deleteReport: 'ลบรายงาน',
-    deleteReportConfirm: 'ลบรายงาน "{name}" ใช่ไหม?',
+    deleteReport: 'ลบข้อเสนอแนะ',
+    deleteReportConfirm: 'ลบข้อเสนอแนะ "{name}"?',
     feedbackAverage: 'เฉลี่ย',
     allCategories: 'ทุกหมวดหมู่',
     allStatuses: 'ทุกสถานะ',
-    noFilteredReports: 'ไม่พบรายงานตามตัวกรอง',
-    noFilteredReportsHint: 'กรุณาปรับคำค้นหา หมวดหมู่ หรือสถานะที่เลือก',
+    noFilteredReports: 'ไม่พบข้อเสนอแนะตามตัวกรอง',
+    noFilteredReportsHint: 'กรุณาปรับคำค้นหาหรือช่วงวันที่',
     reportUserId: 'รหัสผู้ใช้',
     reportUserUnknown: 'ไม่มีข้อมูลผู้ใช้',
     submittedAt: 'เวลาที่ส่ง',
@@ -505,8 +523,8 @@ const dictionary = {
     noReportDetail: 'ไม่มีรายละเอียดรายงาน',
     noReportLocation: 'ไม่ระบุตำแหน่ง',
     unknownTime: 'ไม่มีเวลาบันทึก',
-    noReports: 'ยังไม่มีรายงานปัญหา',
-    noReportsHint: 'รายงานใหม่จากผู้โดยสารจะแสดงที่นี่',
+    noReports: 'ยังไม่มีข้อเสนอแนะ',
+    noReportsHint: 'ข้อเสนอแนะใหม่จะแสดงที่นี่',
     systemUsers: 'ผู้ใช้ในระบบ',
     changeRole: 'เปลี่ยนสิทธิ์',
     deleteStationConfirm: 'ลบสถานี "{name}" ใช่ไหม?',
@@ -589,7 +607,51 @@ const text = computed(() => dictionary[lang.value]);
 const loading = ref(false);
 const error = ref('');
 const isLoggedIn = ref(Boolean(api.token));
-const isSidebarCollapsed = ref(false);
+// Start with the drawer closed on phones; desktop navigation remains expanded.
+const mobileQuery = window.matchMedia('(max-width: 760px)');
+const isMobileViewport = ref(mobileQuery.matches);
+const isSidebarCollapsed = ref(mobileQuery.matches);
+const mobileMenuOpen = computed(() => isMobileViewport.value && !isSidebarCollapsed.value);
+const sidebarElement = ref<HTMLElement | null>(null);
+const sidebarToggleElement = ref<HTMLButtonElement | null>(null);
+let originalBodyOverflow = '';
+
+function syncMobileViewport() {
+  isMobileViewport.value = mobileQuery.matches;
+  isSidebarCollapsed.value = mobileQuery.matches;
+}
+function closeMobileMenu() {
+  if (!isMobileViewport.value) return;
+  isSidebarCollapsed.value = true;
+  void nextTick(() => sidebarToggleElement.value?.focus());
+}
+// Keep keyboard focus inside the mobile drawer until it is closed.
+function handleSidebarKeydown(event: KeyboardEvent) {
+  if (!mobileMenuOpen.value) return;
+  if (event.key === 'Escape') { event.preventDefault(); closeMobileMenu(); return; }
+  if (event.key !== 'Tab') return;
+  const buttons = sidebarElement.value?.querySelectorAll<HTMLButtonElement>('button:not([disabled])');
+  if (!buttons?.length) return;
+  const first = buttons[0];
+  const last = buttons[buttons.length - 1];
+  if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+  else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+}
+// Prevent background scrolling while the mobile drawer owns keyboard focus.
+watch(mobileMenuOpen, open => {
+  if (open) {
+    originalBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    void nextTick(() => sidebarElement.value?.querySelector<HTMLButtonElement>('button')?.focus());
+  } else {
+    document.body.style.overflow = originalBodyOverflow;
+  }
+});
+onMounted(() => mobileQuery.addEventListener('change', syncMobileViewport));
+onUnmounted(() => {
+  mobileQuery.removeEventListener('change', syncMobileViewport);
+  if (mobileMenuOpen.value) document.body.style.overflow = originalBodyOverflow;
+});
 const crowdThresholds = ref<CrowdThresholds>(DEFAULT_CROWD_THRESHOLDS);
 const isAlertMenuOpen = ref(false);
 const dismissedCrowdAlertKeys = ref<Set<string>>(new Set());
@@ -958,6 +1020,7 @@ function toggleLanguage() {
 function setActiveTab(tab: TabKey) {
   if (tab !== activeTab.value && routeDirty.value && !window.confirm(lang.value === 'th' ? 'ทิ้งการแก้ไขเส้นทางที่ยังไม่ได้บันทึกหรือไม่?' : 'Discard unsaved route changes?')) return;
   activeTab.value = tab;
+  closeMobileMenu();
   isAlertMenuOpen.value = false;
   isUserMenuOpen.value = false;
 }
@@ -1000,6 +1063,7 @@ function resetSession() {
   buses.value = [];
   gpsStatus.value = null;
   gpsLoadFailed.value = false;
+  closeMobileMenu();
   api.clearSession();
   localStorage.removeItem(USERNAME_KEY);
   currentUsername.value = '';
@@ -1454,13 +1518,25 @@ async function refreshBuses() {
   }
 }
 
+// Refresh on return to the browser tab, including after network reconnection.
+function refreshVisibleFeedback() {
+  if (document.visibilityState === 'visible' && activeTab.value === 'reports') {
+    void refreshReportsSilently();
+  }
+}
+
 async function refreshReportsSilently() {
   if (!isLoggedIn.value || reportRefreshBusy) return;
 
   reportRefreshBusy = true;
+  const session = api.token;
   try {
-    reports.value = await api.getReports();
+    const latestReports = await api.getReports();
+    // Ignore responses from a session that has since logged out or changed.
+    if (!isLoggedIn.value || api.token !== session) return;
+    reports.value = latestReports;
   } catch (err) {
+    if (!isLoggedIn.value || api.token !== session) return;
     if (isAuthTokenError(err)) {
       resetSession();
       error.value = text.value.sessionExpired;
@@ -1592,6 +1668,9 @@ async function deleteUser(user: User) {
 onMounted(() => {
   busRefreshTimer = window.setInterval(() => { void refreshBuses(); }, 5000);
   document.addEventListener('click', closeUserMenu);
+  document.addEventListener('visibilitychange', refreshVisibleFeedback);
+  window.addEventListener('focus', refreshVisibleFeedback);
+  window.addEventListener('online', refreshVisibleFeedback);
   if (isLoggedIn.value) {
     void loadData();
   }
@@ -1610,16 +1689,20 @@ onMounted(() => {
     }
   }, 15000);
 
+  // Refresh data in place so filters and expanded feedback details stay intact.
   reportRefreshTimer = window.setInterval(() => {
-    if (isLoggedIn.value && !loading.value) {
+    if (document.visibilityState === 'visible') {
       void refreshReportsSilently();
     }
-  }, 5000);
+  }, 3000);
 });
 
 onUnmounted(() => {
   window.clearInterval(busRefreshTimer);
   document.removeEventListener('click', closeUserMenu);
+  document.removeEventListener('visibilitychange', refreshVisibleFeedback);
+  window.removeEventListener('focus', refreshVisibleFeedback);
+  window.removeEventListener('online', refreshVisibleFeedback);
   if (detectorStatusTimer) {
     window.clearInterval(detectorStatusTimer);
   }
@@ -1636,6 +1719,7 @@ onUnmounted(() => {
 });
 
 watch(activeTab, (tab) => {
+  if (tab === 'reports') void refreshReportsSilently();
   if (tab === 'dashboard') {
     void nextTick(initCrowdMap);
   }
@@ -1740,7 +1824,9 @@ watch(selectedCameraStationId, () => {
   </main>
 
   <div v-else class="shell" :class="{ 'sidebar-collapsed': isSidebarCollapsed }">
-    <aside class="sidebar">
+    <button v-if="mobileMenuOpen" class="mobile-sidebar-backdrop" type="button" tabindex="-1" :aria-label="text.toggleSidebar" @click="closeMobileMenu"></button>
+    <aside id="admin-sidebar" ref="sidebarElement" class="sidebar" :inert="isSidebarCollapsed" :role="mobileMenuOpen ? 'dialog' : undefined" :aria-modal="mobileMenuOpen ? true : undefined" :aria-label="text.toggleSidebar" @keydown="handleSidebarKeydown">
+      <button v-if="isMobileViewport" class="mobile-sidebar-close" type="button" :aria-label="lang === 'th' ? 'ปิดเมนู' : 'Close menu'" @click="closeMobileMenu">×</button>
       <div class="sidebar-brand">
         <div class="brand-mark small logo-mark">
           <img :src="mfuLogoUrl" alt="MFU" />
@@ -1786,9 +1872,9 @@ watch(selectedCameraStationId, () => {
       </nav>
     </aside>
 
-    <section class="content">
+    <section class="content" :inert="mobileMenuOpen">
       <header class="topbar">
-        <button class="sidebar-toggle" type="button" :aria-label="text.toggleSidebar" @click="toggleSidebar">
+        <button ref="sidebarToggleElement" class="sidebar-toggle" type="button" :aria-expanded="!isSidebarCollapsed" aria-controls="admin-sidebar" :aria-label="text.toggleSidebar" @click="toggleSidebar">
           <span></span>
           <span></span>
           <span></span>
@@ -1972,7 +2058,6 @@ watch(selectedCameraStationId, () => {
         :reports="reports"
         :text="text"
         @delete-report="deleteReport"
-        @update-report-status="updateReportStatus"
       />
 
       <UsersPage

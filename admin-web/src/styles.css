@@ -2101,6 +2101,8 @@ th {
 
 .report-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 12px;
   border-radius: 8px;
 }
@@ -3608,4 +3610,81 @@ th {
   .bus-card-meta {
     grid-template-columns: 1fr;
   }
+}
+
+/* Mobile admin: a dismissible drawer keeps navigation out of the content flow. */
+.mobile-sidebar-backdrop, .mobile-sidebar-close { display: none; }
+@media (max-width: 760px) {
+  .shell, .shell.sidebar-collapsed { display: block; }
+  .shell .sidebar { display: flex; position: fixed; inset: 0 auto 0 0; width: min(290px, 86vw); height: 100dvh; padding: 24px 16px; z-index: 102; overflow-y: auto; overscroll-behavior: contain; }
+  .shell.sidebar-collapsed .sidebar { display: flex; transform: translateX(-100%); visibility: hidden; pointer-events: none; }
+  .sidebar-brand { padding-right: 24px; }
+  .sidebar nav button { min-height: 48px; }
+  .mobile-sidebar-backdrop { display: block; position: fixed; inset: 0; width: 100%; height: 100dvh; z-index: 101; background: rgba(15,23,42,.42); border: 0; }
+  .mobile-sidebar-close { display: grid; place-items: center; position: absolute; top: 12px; right: 8px; width: 40px; height: 40px; color: #fff; background: rgba(255,255,255,.12); border: 0; border-radius: 10px; font-size: 28px; }
+  .content { min-width: 0; width: 100%; padding: 0 12px 24px; }
+  .topbar { position: sticky; top: 0; z-index: 50; min-height: 60px; margin: 0 -12px 16px; padding: 8px 12px; gap: 8px; }
+  .topbar-actions { gap: 6px; flex-wrap: nowrap; }
+  .sidebar-toggle, .language-toggle, .notification-trigger, .user-menu-trigger { min-width: 44px; min-height: 44px; }
+  .admin-display-name { max-width: 90px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .notification-panel, .user-menu-panel { position: fixed; top: 66px; left: auto; right: 12px; width: min(360px, calc(100vw - 24px)); max-height: calc(100dvh - 90px); overflow-y: auto; }
+  .panel { min-width: 0; padding: 16px; border-radius: 14px; }
+  .panel-heading { gap: 12px; flex-wrap: wrap; }
+  .panel-heading h2 { font-size: 20px; }
+  .panel-heading > *, .split > *, .dashboard-grid > *, .station-form > * { min-width: 0; }
+  .station-form { grid-template-columns: minmax(0, 1fr); }
+  .station-form label { grid-column: auto; }
+  .form-actions { flex-wrap: wrap; }
+  .form-actions button { min-height: 44px; flex: 1 1 auto; }
+  input:not([type=checkbox]):not([type=radio]):not([type=color]), select, textarea { font-size: 16px; max-width: 100%; }
+  .report-filters.feedback-filters { grid-template-columns: minmax(0, 1fr); width: 100%; gap: 14px; }
+  .report-filters input, .report-filters select { font-size: 16px; min-height: 44px; }
+  .report-date-range { gap: 10px; }
+  .report-date-control { grid-template-columns: minmax(0, 1fr); gap: 5px; }
+  .report-date-input { min-height: 44px; width: 100%; }
+  .report-calendar-popover { left: 0; right: auto; width: min(320px, calc(100vw - 80px)); max-width: 100%; }
+  .table-wrap, .report-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+  .modal-backdrop { padding: 12px; }
+  .station-modal { max-height: calc(100dvh - 24px); padding: 18px; }
+  .login-page { padding: 20px 14px; }
+  .login-card { padding: 26px 20px; }
+  .dashboard-metric-card, .dashboard-chart-panel { padding: 18px; }
+  .crowd-map { min-height: 280px; }
+}
+@media (max-width: 380px) { .admin-display-name { display: none; } }
+@media (prefers-reduced-motion: reduce) { .shell, .sidebar { transition: none; } }
+
+/* Let feedback grid items shrink independently of the wide, scrollable table. */
+.report-panel > * { min-width: 0; max-width: 100%; }
+.report-panel .feedback-list, .report-panel .report-table-wrap { min-width: 0; width: 100%; max-width: 100%; }
+.report-panel .report-table-wrap { overflow-x: auto; }
+@media (max-width: 760px) {
+  .report-panel .report-heading { margin-bottom: 0; gap: 8px; }
+  .report-heading-actions { justify-content: flex-start; }
+  .report-panel .report-toolbar { padding: 12px; }
+  .report-panel .report-filters.feedback-filters { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 480px) {
+  .report-panel .report-date-range { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .report-panel .report-date-control { grid-template-columns: minmax(0, 1fr); }
+  .report-panel .report-date-input { min-width: 0; }
+  .report-panel .report-date-input > span { min-width: 0; white-space: normal; overflow-wrap: anywhere; }
+}
+
+/* Keep camera grids bounded even when video has a large intrinsic resolution. */
+.camera-panel { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.camera-panel > *, .cctv-layout > * { min-width: 0; max-width: 100%; }
+@media (max-width: 760px) {
+  .cctv-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Remove the desktop height floor: with 16:9 it otherwise forces a 640px width. */
+  .camera-panel .camera-preview-shell { width: 100%; min-width: 0; max-width: 100%; min-height: 0; aspect-ratio: 16 / 9; }
+  .camera-panel .camera-preview-media { position: absolute; inset: 0; display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; max-width: 100%; }
+  .camera-preview-empty { min-width: 0; max-width: 100%; padding: 14px; overflow-wrap: anywhere; }
+  .camera-preview-empty strong { font-size: 15px; line-height: 1.4; }
+  .camera-preview-empty p { font-size: 12px; line-height: 1.5; }
+  .camera-panel-header p, .detector-status strong, .detector-status small { white-space: normal; overflow-wrap: anywhere; }
+  .camera-control-row { align-items: stretch; }
+  .camera-actions, .roi-toolbar { width: 100%; }
+  .camera-actions .compact-btn, .roi-toolbar .compact-btn { min-height: 44px; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+  .camera-source-field input { width: 100%; }
 }

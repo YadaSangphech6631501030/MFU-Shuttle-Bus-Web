@@ -140,8 +140,9 @@ export const api = {
     return request<GpsStatus>('/api/buses/gps-status', { auth: true, signal: AbortSignal.timeout(12000) });
   },
 
+  // Bypass cached responses and release the polling loop if a request stalls.
   getReports() {
-    return request<Report[]>('/api/report');
+    return request<Report[]>('/api/report', { cache: 'no-store', signal: AbortSignal.timeout(10000) });
   },
 
   updateReportStatus(id: string, status: string) {

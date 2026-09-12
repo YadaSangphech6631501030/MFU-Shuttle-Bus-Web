@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import type { Report } from '../types';
+import FeedbackSummary from './FeedbackSummary.vue';
+import { feedbackRatings, feedbackAverage, feedbackIdentity, feedbackNotes, ratingLabel } from '../services/feedback';
 
-type ReportView = 'active' | 'feedback' | 'history';
 type DateTarget = 'from' | 'to';
 
 const props = defineProps<{
@@ -11,13 +12,8 @@ const props = defineProps<{
 }>();
 
 defineEmits<{
-  updateReportStatus: [report: Report, status: string];
   deleteReport: [report: Report];
 }>();
-
-function selectValue(event: Event) {
-  return (event.target as HTMLSelectElement).value;
-}
 
 function cleanText(value: unknown) {
   if (value === null || value === undefined) return '';
@@ -70,14 +66,6 @@ function reportCategory(report: Report) {
   return localizedReportText(rawReportCategory(report));
 }
 
-function categoryClass(category: string) {
-  return `report-category-${category.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
-}
-
-function shouldShowTableCategory(report: Report, category: string) {
-  return reportTitle(report).trim().toLowerCase() !== category.trim().toLowerCase();
-}
-
 function reportDetail(report: Report) {
   return firstText(report.description, report.detail, props.text.noReportDetail);
 }
@@ -86,34 +74,28 @@ function reportLocation(report: Report) {
   return firstText(report.location, props.text.noReportLocation);
 }
 
-function reporterSearchText() {
-  return props.text.guestUser;
-}
-
-function isSameReport(a: Report, b: Report) {
-  if (a._id && b._id) return a._id === b._id;
-  return a === b;
-}
-
+// Use submitted identity when present; older anonymous entries retain a guest label.
 function reporterName(report: Report) {
-  const index = guestReportOrder.value.findIndex((item) => isSameReport(item, report));
-  return `${props.text.guestUser} ${index >= 0 ? String(index + 1).padStart(2, '0') : ''}`.trim();
+  return feedbackIdentity(report).name || props.text.guestUser;
 }
-
-function normalizedStatus(report: Report) {
-  const status = cleanText(report.status);
-  return status || 'pending';
+function averageText(report: Report) {
+  return feedbackAverage(report)?.toFixed(1) ?? '—';
 }
-
-function statusLabel(status: string) {
-  if (status === 'resolved') return props.text.resolvedStatus;
-  if (status === 'in_progress') return props.text.inProgressStatus;
-  return props.text.pendingStatus;
-}
-
-function statusClass(report: Report) {
-  return `report-status-${normalizedStatus(report).replace(/_/g, '-')}`;
-}
+const copy = computed(() => props.text.language === 'TH' ? {
+  average: 'คะแนนเฉลี่ย', reviewer: 'ผู้ประเมิน', details: 'ดูรายละเอียด', hide: 'ซ่อนรายละเอียด',
+  email: 'อีเมล', noEmail: 'ไม่ได้ระบุอีเมล', noRatings: 'ไม่มีคะแนนประเมิน',
+  reset: 'ล้างตัวกรอง', all: 'ทั้งหมด', week: '7 วันล่าสุด', month: 'เดือนนี้',
+  previous: 'ก่อนหน้า', next: 'ถัดไป', page: 'หน้า',
+} : {
+  average: 'Average rating', reviewer: 'Reviewer', details: 'View details', hide: 'Hide details',
+  email: 'Email', noEmail: 'No email provided', noRatings: 'No ratings available',
+  reset: 'Clear filters', all: 'All time', week: 'Last 7 days', month: 'This month',
+  previous: 'Previous', next: 'Next', page: 'Page',
+});
+const expandedId = ref<string | null>(null);
+const currentPage = ref(1);
+const pageSize = 10;
+function toggleDetails(id: string) { expandedId.value = expandedId.value === id ? null : id; }
 
 function reportTimestamp(report: Report) {
   return firstText(report.createdAt, report.time);
@@ -186,41 +168,6 @@ function formatReportDateTime(report: Report) {
   }).format(date);
 }
 
-function setReportView(view: ReportView) {
-  activeReportView.value = view;
-  categoryFilter.value = 'all';
-  statusFilter.value = 'all';
-}
-
-function reportDetailLines(report: Report) {
-  return reportDetail(report).split(/\n+/).map((line) => line.trim()).filter(Boolean);
-}
-
-function ratingDetail(line: string) {
-  const match = line.match(/^(.*?):\s*(\d+)\/5\s*(?:\((.*?)\))?$/);
-  if (!match) return null;
-
-  return {
-    label: match[1].trim(),
-    score: match[2],
-    note: (match[3] || '').trim(),
-  };
-}
-
-function structuredFeedbackRatings(report: Report) {
-  return (report.feedbackRatings || [])
-    .map((item) => ({
-      label: firstText(item.label, item.key),
-      score: Number(item.score),
-      note: firstText(item.description),
-    }))
-    .filter((item) => item.label && Number.isFinite(item.score));
-}
-
-function hasStructuredFeedbackRatings(report: Report) {
-  return structuredFeedbackRatings(report).length > 0;
-}
-
 function isFeedbackReport(report: Report) {
   return rawReportCategory(report).toLowerCase() === 'feedback';
 }
@@ -233,8 +180,8 @@ function matchesSearch(report: Report, query: string) {
     reportCategory(report),
     reportDetail(report),
     reportLocation(report),
-    reporterSearchText(),
-    statusLabel(normalizedStatus(report)),
+    reporterName(report),
+    feedbackIdentity(report).email,
     formatReportDateTime(report),
   ].join(' ').toLowerCase();
 
@@ -249,10 +196,7 @@ function matchesDateRange(report: Report) {
   return true;
 }
 
-const activeReportView = ref<ReportView>('active');
 const searchQuery = ref('');
-const categoryFilter = ref('all');
-const statusFilter = ref('all');
 const dateFromFilter = ref('');
 const dateToFilter = ref('');
 const datePickerRoot = ref<HTMLElement | null>(null);
@@ -358,116 +302,41 @@ onUnmounted(() => {
 });
 
 const feedbackReports = computed(() => props.reports.filter((report) => isFeedbackReport(report)));
-const activeReports = computed(() => props.reports
-  .filter((report) => !isFeedbackReport(report))
-  .filter((report) => normalizedStatus(report) !== 'resolved'));
-const historyReports = computed(() => props.reports
-  .filter((report) => !isFeedbackReport(report))
-  .filter((report) => normalizedStatus(report) === 'resolved'));
-const visibleReports = computed(() => {
-  if (activeReportView.value === 'feedback') return feedbackReports.value;
-  if (activeReportView.value === 'history') return historyReports.value;
-  return activeReports.value;
-});
-
-const guestReportOrder = computed(() => [...props.reports].sort((a, b) => {
-  const aDate = reportDate(a)?.getTime() ?? 0;
-  const bDate = reportDate(b)?.getTime() ?? 0;
-  if (aDate !== bDate) return aDate - bDate;
-  return String(a._id || '').localeCompare(String(b._id || ''));
-}));
-
-const categoryOptions = computed(() => {
-  const categories = new Set(visibleReports.value.map((report) => reportCategory(report)));
-  return Array.from(categories).sort((a, b) => a.localeCompare(b));
-});
-
-const statusFilterOptions = computed(() => {
-  if (activeReportView.value === 'history') {
-    return [{ value: 'resolved', label: props.text.resolvedStatus }];
-  }
-
-  const options = [
-    { value: 'pending', label: props.text.pendingStatus },
-    { value: 'in_progress', label: props.text.inProgressStatus },
-  ];
-
-  if (activeReportView.value === 'feedback') {
-    options.push({ value: 'resolved', label: props.text.resolvedStatus });
-  }
-
-  return options;
-});
+// Display feedback only without deleting stored issue reports.
+const visibleReports = feedbackReports;
 
 const filteredReports = computed(() => {
   const query = searchQuery.value.trim().toLowerCase();
 
   return visibleReports.value.filter((report) => {
-    if (activeReportView.value !== 'feedback' && categoryFilter.value !== 'all' && reportCategory(report) !== categoryFilter.value) return false;
-    if (statusFilter.value !== 'all' && normalizedStatus(report) !== statusFilter.value) return false;
     if (!matchesDateRange(report)) return false;
     return matchesSearch(report, query);
-  });
+  }).sort((a, b) => (reportDate(b)?.getTime() ?? 0) - (reportDate(a)?.getTime() ?? 0));
 });
 
-const reportGroups = computed(() => {
-  if (activeReportView.value === 'feedback') {
-    return [{ category: '', items: filteredReports.value }];
-  }
-
-  const groups = new Map<string, Report[]>();
-
-  filteredReports.value.forEach((report) => {
-    const category = reportCategory(report);
-    const group = groups.get(category) || [];
-    group.push(report);
-    groups.set(category, group);
-  });
-
-  return Array.from(groups, ([category, items]) => ({ category, items }));
-});
+// Paginate the table only; charts summarize every record matching the filters.
+const pageCount = computed(() => Math.max(1, Math.ceil(filteredReports.value.length / pageSize)));
+const pagedReports = computed(() => filteredReports.value.slice((currentPage.value - 1) * pageSize, currentPage.value * pageSize));
+// User filter changes reset pagination, while background refreshes preserve the current page.
+watch([searchQuery, dateFromFilter, dateToFilter], () => { currentPage.value = 1; expandedId.value = null; });
+// Clamp the page after deletions so the table cannot remain on an empty last page.
+watch(pageCount, count => { currentPage.value = Math.min(currentPage.value, count); });
 </script>
 
 <template>
   <section class="panel report-panel">
     <div class="panel-heading report-heading">
       <div>
-        <h2>{{ text.issueReports }}</h2>
+        <h2>{{ text.feedbackReports }}</h2>
       </div>
       <div class="report-heading-actions">
         <span class="report-total">{{ filteredReports.length }} / {{ visibleReports.length }} {{ text.reportsUnit }}</span>
       </div>
     </div>
 
-    <div class="report-toolbar">
-      <div class="report-view-toggle" role="tablist" :aria-label="text.reportViewLabel">
-        <button
-          type="button"
-          :class="{ active: activeReportView === 'active' }"
-          @click="setReportView('active')"
-        >
-          {{ text.activeReports }}
-          <span>{{ activeReports.length }}</span>
-        </button>
-        <button
-          type="button"
-          :class="{ active: activeReportView === 'feedback' }"
-          @click="setReportView('feedback')"
-        >
-          {{ text.feedbackReports }}
-          <span>{{ feedbackReports.length }}</span>
-        </button>
-        <button
-          type="button"
-          :class="{ active: activeReportView === 'history' }"
-          @click="setReportView('history')"
-        >
-          {{ text.historyReports }}
-          <span>{{ historyReports.length }}</span>
-        </button>
-      </div>
 
-      <div class="report-filters" :class="{ 'feedback-filters': activeReportView === 'feedback' }">
+    <div class="report-toolbar">
+      <div class="report-filters feedback-filters">
         <label class="report-search-field">
           {{ text.reportSearch }}
           <span class="report-search-input">
@@ -478,15 +347,7 @@ const reportGroups = computed(() => {
             <input v-model="searchQuery" type="search" :placeholder="text.reportSearchPlaceholder" />
           </span>
         </label>
-        <label v-if="activeReportView !== 'feedback'">
-          {{ text.reportCategoryFilter }}
-          <select v-model="categoryFilter">
-            <option value="all">{{ text.allCategories }}</option>
-            <option v-for="category in categoryOptions" :key="category" :value="category">
-              {{ category }}
-            </option>
-          </select>
-        </label>
+
         <label class="report-date-range-field">
           {{ text.reportDateRange }}
           <span ref="datePickerRoot" class="report-date-range">
@@ -566,123 +427,83 @@ const reportGroups = computed(() => {
             </div>
           </span>
         </label>
-        <label v-if="activeReportView !== 'feedback'">
-          {{ text.reportStatusFilter }}
-          <select v-model="statusFilter">
-            <option value="all">{{ text.allStatuses }}</option>
-            <option v-for="option in statusFilterOptions" :key="option.value" :value="option.value">
-              {{ option.label }}
-            </option>
-          </select>
-        </label>
+
       </div>
     </div>
 
-    <div v-if="filteredReports.length" class="report-category-list">
-      <section v-for="group in reportGroups" :key="group.category" class="report-category-section">
-        <header v-if="activeReportView !== 'feedback'" class="report-category-heading">
-          <div>
-            <span class="report-category-pill" :class="categoryClass(group.category)">{{ group.category }}</span>
-          </div>
-          <span>{{ group.items.length }} {{ text.reportsUnit }}</span>
-        </header>
+    <FeedbackSummary :reports="filteredReports" :language="text.language" />
 
-        <div class="report-table-wrap">
-          <table class="report-table" :class="{ 'feedback-table': activeReportView === 'feedback' }">
-            <thead>
+    <div v-if="filteredReports.length" class="feedback-list">
+      <div class="report-table-wrap" tabindex="0" role="region" :aria-label="text.feedbackReports">
+        <table class="compact-feedback-table">
+          <thead><tr><th>{{ text.submittedAt }}</th><th>{{ copy.reviewer }}</th><th>{{ copy.average }}</th><th>{{ text.reportActions }}</th></tr></thead>
+          <tbody>
+            <template v-for="report in pagedReports" :key="report._id">
               <tr>
-                <th>#</th>
-                <th>{{ text.reportTitleLabel }}</th>
-                <th>{{ text.reportDetailLabel }}</th>
-                <th v-if="activeReportView !== 'feedback'">{{ text.reportLocation }}</th>
-                <th>{{ text.reportedBy }}</th>
-                <th>{{ text.submittedAt }}</th>
-                <th v-if="activeReportView !== 'feedback'">{{ text.reportStatus }}</th>
-                <th class="report-actions-heading" :aria-label="text.reportActions"></th>
+                <td class="feedback-date">{{ formatReportDateTime(report) }}</td>
+                <td><strong>{{ reporterName(report) }}</strong></td>
+                <td><span class="feedback-score"><span aria-hidden="true">★</span> {{ averageText(report) }} / 5</span></td>
+                <td><div class="feedback-row-actions">
+                  <button type="button" class="feedback-detail-btn" :aria-expanded="expandedId === report._id" :aria-controls="`feedback-detail-${report._id}`" @click="toggleDetails(report._id)">{{ expandedId === report._id ? copy.hide : copy.details }}</button>
+                  <button class="report-delete-btn" type="button" :aria-label="`${text.deleteReport}: ${reporterName(report)}`" @click="$emit('deleteReport', report)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5" /></svg></button>
+                </div></td>
               </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(report, rowIndex) in group.items" :key="report._id">
-                <td class="report-index">{{ rowIndex + 1 }}</td>
-                <td>
-                  <strong class="report-table-title">{{ reportTitle(report) }}</strong>
-                  <span v-if="shouldShowTableCategory(report, group.category)" class="report-table-category">{{ group.category }}</span>
-                </td>
-                <td>
-                  <div v-if="hasStructuredFeedbackRatings(report)" class="feedback-rating-list">
-                    <div
-                      v-for="rating in structuredFeedbackRatings(report)"
-                      :key="rating.label"
-                      class="feedback-rating-item"
-                    >
-                      <span>{{ rating.label }}</span>
-                      <strong>{{ rating.score }}/5</strong>
-                      <small v-if="rating.note">{{ rating.note }}</small>
-                    </div>
-                    <div v-if="report.feedbackAverage" class="feedback-rating-average">
-                      <span>{{ text.feedbackAverage }}</span>
-                      <strong>{{ report.feedbackAverage }}/5</strong>
+              <tr v-if="expandedId === report._id" :id="`feedback-detail-${report._id}`" class="feedback-expanded-row">
+                <td colspan="4"><section class="feedback-detail-panel" :aria-label="copy.details">
+                  <p><strong>{{ copy.email }}:</strong> {{ feedbackIdentity(report).email || copy.noEmail }}</p>
+                  <div class="feedback-question-details">
+                    <div v-for="rating in feedbackRatings(report)" :key="rating.key">
+                      <span>{{ ratingLabel(rating, text.language) }}</span><strong>{{ rating.score }} / 5</strong><small v-if="rating.note">{{ rating.note }}</small>
                     </div>
                   </div>
-                  <div v-else-if="isFeedbackReport(report)" class="feedback-rating-list">
-                    <div v-for="line in reportDetailLines(report)" :key="line" class="feedback-rating-item">
-                      <template v-if="ratingDetail(line)">
-                        <span>{{ ratingDetail(line)?.label }}</span>
-                        <strong>{{ ratingDetail(line)?.score }}/5</strong>
-                        <small v-if="ratingDetail(line)?.note">{{ ratingDetail(line)?.note }}</small>
-                      </template>
-                      <span v-else>{{ line }}</span>
-                    </div>
-                  </div>
-                  <span v-else class="report-table-detail">{{ reportDetail(report) }}</span>
-                </td>
-                <td v-if="activeReportView !== 'feedback'" class="report-table-location">{{ reportLocation(report) }}</td>
-                <td>
-                  <strong class="reporter-table-name">{{ reporterName(report) }}</strong>
-                </td>
-                <td class="report-table-time">{{ formatReportDateTime(report) }}</td>
-                <td v-if="activeReportView !== 'feedback'">
-                  <div class="report-status-cell">
-                    <span
-                      v-if="activeReportView === 'history'"
-                      class="report-status-display report-status-resolved"
-                    >
-                      {{ text.resolvedStatus }}
-                    </span>
-                    <select
-                      v-else
-                      class="report-status-select"
-                      :class="statusClass(report)"
-                      :value="normalizedStatus(report)"
-                      @change="$emit('updateReportStatus', report, selectValue($event))"
-                    >
-                      <option value="pending">{{ text.pendingStatus }}</option>
-                      <option value="in_progress">{{ text.inProgressStatus }}</option>
-                      <option value="resolved">{{ text.resolvedStatus }}</option>
-                    </select>
-                  </div>
-                </td>
-                <td>
-                  <button class="report-delete-btn" type="button" :aria-label="text.deleteReport" @click="$emit('deleteReport', report)">
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M3 6h18" />
-                      <path d="M8 6V4h8v2" />
-                      <path d="M19 6l-1 14H6L5 6" />
-                      <path d="M10 11v5" />
-                      <path d="M14 11v5" />
-                    </svg>
-                  </button>
-                </td>
+                  <p v-if="!feedbackRatings(report).length">{{ copy.noRatings }}</p>
+                  <p v-for="(note, index) in feedbackNotes(report)" :key="index" class="feedback-note-text">{{ note }}</p>
+                </section></td>
               </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+            </template>
+          </tbody>
+        </table>
+      </div>
+      <nav v-if="pageCount > 1" class="feedback-pagination" :aria-label="copy.page">
+        <button type="button" :disabled="currentPage === 1" @click="currentPage--; expandedId = null">{{ copy.previous }}</button>
+        <span>{{ copy.page }} {{ currentPage }} / {{ pageCount }}</span>
+        <button type="button" :disabled="currentPage === pageCount" @click="currentPage++; expandedId = null">{{ copy.next }}</button>
+      </nav>
     </div>
 
     <div v-else class="report-empty-state">
-      <strong>{{ reports.length ? text.noFilteredReports : text.noReports }}</strong>
-      <span>{{ reports.length ? text.noFilteredReportsHint : text.noReportsHint }}</span>
+      <strong>{{ feedbackReports.length ? text.noFilteredReports : text.noReports }}</strong>
+      <span>{{ feedbackReports.length ? text.noFilteredReportsHint : text.noReportsHint }}</span>
     </div>
   </section>
 </template>
+
+<style scoped>
+.feedback-pagination button { padding: 8px 14px; border-radius: 9px; border: 1px solid #e1e6ee; background: #fff; color: #52627a; font: inherit; font-size: 12px; cursor: pointer; }
+.feedback-detail-btn:hover { background: #fff3f1; border-color: #dab4af; color: #931d18; }
+.feedback-pagination button:disabled { opacity: .45; cursor: default; }
+.compact-feedback-table { width: 100%; min-width: 660px; border-collapse: collapse; font-size: 13px; }
+.compact-feedback-table th { padding: 14px 18px; background: #f7f9fc; text-align: left; font-size: 12px; font-weight: 600; color: #6c7d94; }
+.compact-feedback-table td { padding: 17px 18px; border-bottom: 1px solid #edf0f4; color: #324258; overflow-wrap: anywhere; }
+.compact-feedback-table th:first-child { width: 26%; }
+.compact-feedback-table th:nth-child(2) { width: 28%; }
+.feedback-date { font-size: 12px; color: #718096; }
+.feedback-score { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px; background: #fff8e8; white-space: nowrap; font-weight: 600; }
+.feedback-score > span { color: #eab325; }
+.feedback-row-actions { display: flex; align-items: center; gap: 10px; }
+.feedback-detail-btn { border: 1px solid #e4e8ef; border-radius: 8px; background: #fff; color: #53637a; padding: 8px 12px; font: inherit; font-size: 12px; white-space: nowrap; cursor: pointer; }
+.feedback-detail-panel { padding: 6px 8px 14px; }
+.feedback-expanded-row { background: #fafbfe; }
+.feedback-detail-panel > p { margin: 8px 0 18px; overflow-wrap: anywhere; }
+.feedback-question-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 10px; }
+.feedback-question-details > div { display: grid; grid-template-columns: 1fr auto; gap: 10px; padding: 14px; background: #fff; border: 1px solid #e7ecf3; border-radius: 10px; }
+.feedback-question-details small { grid-column: 1 / -1; color: #718096; }
+.feedback-question-details strong { color: #9b6812; }
+.feedback-note-text { white-space: pre-wrap; }
+.feedback-pagination { display: flex; justify-content: flex-end; align-items: center; gap: 16px; padding: 18px 0 0; font-size: 12px; color: #718096; }
+@media (max-width: 760px) {
+  .feedback-detail-btn, .feedback-row-actions .report-delete-btn, .feedback-pagination button { min-height: 44px; }
+  .feedback-pagination { justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+  .compact-feedback-table td, .compact-feedback-table th { padding: 12px; }
+}
+</style>
