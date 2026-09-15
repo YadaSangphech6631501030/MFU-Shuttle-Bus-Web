@@ -105,6 +105,13 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .trip-estimate-row.total { margin-top: 2px; padding-top: 5px; border-top: 1px solid #f0f0f0; }
 .trip-estimate-row.total > b { color: var(--mfu-red); }
 .trip-estimate-unavailable { margin: 8px 0 2px; color: #777; font-size: 12px; line-height: 1.4; }
+.trip-estimate-unavailable p { margin: 6px 0; overflow-wrap: anywhere; }
+.boarding-suggestion { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ededed; color: var(--ink); }
+.boarding-suggestion > strong { color: var(--mfu-red); }
+.boarding-suggestion .boarding-stop { font-size: 14px; font-weight: 700; }
+.boarding-suggestion small { display: block; color: #777; line-height: 1.5; }
+/* Keep longer boarding guidance scrollable on short mobile viewports. */
+.trip-estimate { max-height: calc(100dvh - 210px); overflow-y: auto; }
 .line-selector { position: absolute; z-index: 11; right: 28px; bottom: 24px; width: 190px; display: grid; gap: 7px; padding: 9px; border: 1px solid #e7e7e7; border-radius: 24px; background: rgba(255,255,255,.96); }
 .line-selector button { min-height: 58px; display: flex; align-items: center; justify-content: center; gap: 9px; border: 2px solid #e5e5e5; border-radius: 22px; background: #fff; color: #202124; font-size: 18px; font-weight: 700; }
 .line-selector button.active { border-color: #d9c48d; }
