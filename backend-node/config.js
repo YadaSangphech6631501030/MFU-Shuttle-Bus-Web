@@ -16,7 +16,8 @@ module.exports = {
     password: process.env.GPS_PASSWORD || '',
     pollMs: Math.max(5000, numberFromEnv('GPS_POLL_SECONDS', 5) * 1000),
     timeoutMs: Math.max(1000, numberFromEnv('GPS_TIMEOUT_SECONDS', 15) * 1000),
-    staleMs: Math.max(10000, numberFromEnv('GPS_STALE_SECONDS', 120) * 1000),
+    // Fresh positions must be recent enough for passenger arrival estimates.
+    staleMs: Math.max(10000, numberFromEnv('GPS_STALE_SECONDS', 30) * 1000),
     speedUnit: process.env.GPS_SPEED_UNIT || 'unknown',
   },
   PORT: numberFromEnv("PORT", 5101),

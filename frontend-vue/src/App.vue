@@ -2,6 +2,7 @@
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type ShuttleRoute, type Station } from './services/api';
+import { canEstimateArrival, gpsAgeMs, lastKnownPosition, interpolatePosition, holdStoppedPosition, ETA_MAX_AGE_MS } from './liveGps';
 import { distanceMeters, findRide, findBoardingStop, type BoardingSuggestion } from './routePlanning';
 import busLeftUrl from '../assets/gemcar_left.png';
 import busRightUrl from '../assets/gemcar_right.png';
@@ -22,7 +23,9 @@ type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language
 type Line = string;
 type RoutePoint = { lat: number; lng: number };
 type MapViewport = { center: RoutePoint; zoom: number };
-type BusMarkerEntry = { marker: any; key: string; position: RoutePoint; bearing: number | null; line: Line; turnReady: boolean; turnTimer?: number };
+type BusMarkerEntry = { marker: any; key: string; position: RoutePoint; bearing: number | null; line: Line; turnReady: boolean; turnTimer?: number; animationFrame?: number; lastGpsAt?: string | null; lastMovement?: string };
+const gpsNow = ref(Date.now());
+let gpsClockTimer: number | undefined;
 type GoogleMap = any;
 
 declare global {
@@ -348,9 +351,11 @@ function busMatchesSelectedLine(bus: Bus) {
 }
 
 function busPosition(bus: Bus) {
-  if (bus.connectionStatus !== 'fresh' || !bus.feedHealthy) return null;
-  if (typeof bus.lat !== 'number' || typeof bus.lng !== 'number' || !Number.isFinite(bus.lat) || !Number.isFinite(bus.lng)) return null;
-  return { lat: bus.lat, lng: bus.lng };
+  return lastKnownPosition(bus, gpsNow.value);
+}
+
+function busPositionIsRecent(bus: Bus) {
+  return bus.feedHealthy && bus.connectionStatus === 'fresh' && gpsAgeMs(bus, gpsNow.value) <= ETA_MAX_AGE_MS;
 }
 
 // Project a GPS point onto a route so ETA and station direction use road distance.
@@ -481,8 +486,9 @@ function setBusMarkerIcon(marker: any, url: string) {
 }
 
 function clearBusMarkers() {
-  busMarkers.forEach(({ marker, turnTimer }) => {
+  busMarkers.forEach(({ marker, turnTimer, animationFrame }) => {
     if (turnTimer !== undefined) window.clearTimeout(turnTimer);
+    if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
     marker.setMap(null);
   });
   busMarkers = [];
@@ -561,9 +567,11 @@ function busStationSummary(bus: Bus, position: RoutePoint) {
 function busPopupHtml(bus: Bus, position: RoutePoint) {
   const busNumber = bus.busNumber || bus.busId?.replace(/^MFU/i, '') || '-';
   const summary = busStationSummary(bus, position);
+  const ageSeconds = Math.max(0, Math.floor(gpsAgeMs(bus, gpsNow.value) / 1000));
+  const ageLabel = lang.value === 'th' ? `พิกัดล่าสุด ${ageSeconds} วินาทีที่แล้ว` : `Last GPS position ${ageSeconds}s ago`;
   const currentLabel = summary ? escapeHtml(stationName(summary.current)) : '-';
   const nextLabel = summary ? escapeHtml(stationName(summary.next)) : '-';
-  return `<div class="bus-map-popup"><div class="bus-map-popup-number">${lang.value === 'th' ? 'หมายเลขรถ' : 'Bus number'}: <strong>${escapeHtml(busNumber)}</strong></div><div class="bus-map-popup-route"><div>${lang.value === 'th' ? 'สถานีปัจจุบัน' : 'Current station'}: ${currentLabel}</div><div>${lang.value === 'th' ? 'สถานีถัดไป' : 'Next station'}: ${nextLabel}</div></div></div>`;
+  return `<div class="bus-map-popup"><small>${ageLabel}</small><div class="bus-map-popup-number">${lang.value === 'th' ? 'หมายเลขรถ' : 'Bus number'}: <strong>${escapeHtml(busNumber)}</strong></div><div class="bus-map-popup-route"><div>${lang.value === 'th' ? 'สถานีปัจจุบัน' : 'Current station'}: ${currentLabel}</div><div>${lang.value === 'th' ? 'สถานีถัดไป' : 'Next station'}: ${nextLabel}</div></div></div>`;
 }
 
 function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
@@ -611,9 +619,15 @@ function renderBusMarkers(paths = routePathCache) {
     const position = busPosition(bus);
     if (!position) return;
     positions.push(position);
-    const marker = new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20,
+    busMarkers.push(createBusMarker(bus, position));
+  });
+  return positions;
+}
+
+function createBusMarker(bus: Bus, position: RoutePoint): BusMarkerEntry {
+    const marker = new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20, opacity: busPositionIsRecent(bus) ? 1 : 0.5,
       icon: { url: busIconForDirection(busTravelBearing(bus, position)), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } });
-    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position, bearing: busTravelBearing(bus, position), line: nearestBusLine(bus, position), turnReady: true };
+    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position, bearing: busTravelBearing(bus, position), line: nearestBusLine(bus, position), turnReady: true, lastGpsAt: bus.lastGpsAt, lastMovement: bus.status };
     marker.addListener('click', () => {
       const currentPosition = entry.marker.getPosition?.();
       toggleBusPopup(
@@ -621,9 +635,7 @@ function renderBusMarkers(paths = routePathCache) {
         currentPosition ? { lat: currentPosition.lat(), lng: currentPosition.lng() } : entry.position,
       );
     });
-    busMarkers.push(entry);
-  });
-  return positions;
+    return entry;
 }
 
 // Keep visible bus markers and open popups synchronized with the latest GPS response.
@@ -634,18 +646,57 @@ function updateLiveBusMarkers() {
     .map((bus) => ({ bus, position: busPosition(bus) }))
     .filter((item): item is { bus: Bus; position: RoutePoint } => item.position !== null);
   const nextKeys = visibleBuses.map(({ bus, position }) => bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`);
-  const currentKeys = busMarkers.map(({ key }) => key);
-
-  // Rebuild only when a bus becomes visible or stale; normal GPS updates move existing markers in place.
-  if (nextKeys.length !== currentKeys.length || nextKeys.some((key, index) => key !== currentKeys[index])) {
-    renderBusMarkers();
-    return;
-  }
-
+  // Reconcile by vehicle ID so one vehicle expiring cannot reset all other markers/popups.
+  const existing = new Map(busMarkers.map(entry => [entry.key, entry]));
+  busMarkers.forEach(entry => {
+    if (nextKeys.includes(entry.key)) return;
+    if (entry.animationFrame !== undefined) cancelAnimationFrame(entry.animationFrame);
+    if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
+    entry.marker.setMap(null);
+    if (busOverlayKey === entry.key) closeBusPopup();
+  });
+  busMarkers = visibleBuses.map(({ bus, position }, index) => existing.get(nextKeys[index]) || createBusMarker(bus, position));
   visibleBuses.forEach(({ bus, position }, index) => {
     const entry = busMarkers[index];
+    entry.marker.setOpacity(busPositionIsRecent(bus) ? 1 : 0.5);
+    if (entry.lastGpsAt === bus.lastGpsAt && entry.lastMovement === bus.status) return;
+    const previousGpsAt = entry.lastGpsAt;
+    const previousMovement = entry.lastMovement;
+    entry.lastMovement = bus.status;
+    entry.lastGpsAt = bus.lastGpsAt;
+    if (entry.animationFrame !== undefined) cancelAnimationFrame(entry.animationFrame);
+    entry.animationFrame = undefined;
+    const markerPosition = entry.marker.getPosition();
+    const from = { lat: markerPosition.lat(), lng: markerPosition.lng() };
+    if (bus.status !== 'RUNNING') {
+      if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
+      entry.turnTimer = undefined;
+      entry.turnReady = true;
+      setBusMarkerIcon(entry.marker, busIconForDirection(entry.bearing));
+      if (holdStoppedPosition(previousMovement, bus, distanceMeters(entry.position, position))) return;
+      // Accept the final stop fix or a substantial correction immediately, without simulating driving.
+      entry.position = position;
+      entry.marker.setPosition(position);
+      return;
+    }
     updateBusTurn(entry, bus, position);
-    entry.marker.setPosition(position);
+    entry.position = position;
+    // Only interpolate nearby, recent measured points. Never project movement beyond the GPS fix.
+    const gap = Date.parse(bus.lastGpsAt || '') - Date.parse(previousGpsAt || '');
+    if (!busPositionIsRecent(bus) || gap <= 0 || gap > ETA_MAX_AGE_MS || distanceMeters(from, position) > 100) {
+      entry.marker.setPosition(position);
+      entry.animationFrame = undefined;
+      return;
+    }
+    const started = performance.now();
+    const animate = (time: number) => {
+      const fraction = Math.min(1, (time - started) / 1000);
+      const displayed = interpolatePosition(from, position, fraction);
+      entry.marker.setPosition(displayed);
+      if (busOverlayKey === entry.key) { busOverlayPosition = displayed; busOverlay?.draw?.(); }
+      entry.animationFrame = fraction < 1 ? requestAnimationFrame(animate) : undefined;
+    };
+    entry.animationFrame = requestAnimationFrame(animate);
   });
 }
 
@@ -748,7 +799,8 @@ function refreshBusPopup() {
     closeBusPopup();
     return;
   }
-  busOverlayPosition = entry.position;
+  const displayed = entry.marker.getPosition();
+  busOverlayPosition = { lat: displayed.lat(), lng: displayed.lng() };
   const element = busOverlay.element as HTMLElement | undefined;
   if (element) element.innerHTML = busPopupHtml(bus, entry.position);
   busOverlay.draw?.();
@@ -759,26 +811,32 @@ function stationArrivalMinutes(station: Station) {
   const lines = (station.lines || []).filter((line): line is Line => Boolean(line));
   const estimates = lines.map((line) => stationArrivalMinutesForLine(station, line)).filter((value): value is number => value !== null);
   if (estimates.length) return Math.min(...estimates);
-  return stationArrivalMinutesForLine(station);
+  return null;
 }
 
 function stationArrivalMinutesForLine(station: Station, line?: Line): number | null {
   const stationPosition = { lat: station.lat, lng: station.lng };
   const routePath = line ? routePathCache.get(line) : undefined;
+  if (!line || !routePath || routePath.length < 2) return null;
   const estimates = buses.value
     .filter((bus) => {
-      if (!busPosition(bus)) return false;
-      if (!line) return true;
+      if (!busPosition(bus) || !canEstimateArrival(bus, gpsNow.value)) return false;
       const busLine = busLineKey(bus);
-      return busLine === null || busLine === line;
+      return busLine === line;
     })
     .map((bus) => {
       const position = busPosition(bus);
       if (!position) return null;
-      const distance = routeDistanceBetween(position, stationPosition, routePath);
-      const speedKph = Number(bus.speedKph);
-      const effectiveSpeedKph = Number.isFinite(speedKph) && speedKph > 1 ? speedKph : 18;
-      return Math.max(1, Math.ceil(distance / (effectiveSpeedKph * 1000 / 3600) / 60));
+      const progress = routeProgressAtPosition(position, routePath);
+      const stationProgress = routeProgressAtPosition(stationPosition, routePath);
+      const bearing = routeBearingAtPosition(position, routePath);
+      if (!progress || !stationProgress || progress.distanceToPath > 100 || stationProgress.distanceToPath > 100
+        || bearing === null || typeof bus.directionRaw !== 'number' || !Number.isFinite(bus.directionRaw)) return null;
+      const forward = angleDifference(bearing, bus.directionRaw) <= 90;
+      const distance = (stationProgress.distanceFromStart - progress.distanceFromStart) * (forward ? 1 : -1);
+      // A vehicle that has already passed this stop cannot be treated as approaching it.
+      if (distance < 0) return null;
+      return Math.max(1, Math.ceil(distance / (bus.speedKph! * 1000 / 3600) / 60));
     })
     .filter((value): value is number => value !== null);
   return estimates.length ? Math.min(...estimates) : null;
@@ -1186,6 +1244,12 @@ let publicDataSignatureValue = '';
 async function loadData() { isLoading.value = true; message.value = ''; try { const routeList = await api.getRoutes().catch(() => null); const [stationLists, busList] = await Promise.all([Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))), api.getBuses().catch(() => [])]); const nextStations = combinePublicStations(stationLists); stations.value = nextStations; buses.value = busList; routes.value = routeList || []; routesLoaded.value = routeList !== null; syncRouteControls(routeList); publicDataSignatureValue = publicDataSignature(nextStations, routes.value); } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
 onMounted(async () => {
   window.addEventListener('pagehide', saveMapViewport);
+  gpsClockTimer = window.setInterval(() => {
+    gpsNow.value = Date.now();
+    updateLiveBusMarkers();
+    refreshStationPopup();
+    refreshBusPopup();
+  }, 1000);
   await loadData();
   await initGoogleMap();
   startUserLocationTracking();
@@ -1198,6 +1262,7 @@ onBeforeUnmount(() => {
   clearBusMarkers();
   mapResizeObserver?.disconnect();
   if (liveBusTimer) window.clearInterval(liveBusTimer);
+  if (gpsClockTimer) window.clearInterval(gpsClockTimer);
   if (publicDataTimer) window.clearInterval(publicDataTimer);
   if (userLocationWatchId !== undefined) navigator.geolocation?.clearWatch(userLocationWatchId);
   closeUserLocationPopup();

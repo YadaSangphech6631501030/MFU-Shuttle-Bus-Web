@@ -32,6 +32,11 @@ defineEmits<{
   stopSelectedDetector: [];
 }>();
 
+function stationDisplayName(station: Station) {
+  const thaiName = station.nameTH?.trim();
+  return props.text.language === 'TH' && thaiName ? thaiName : station.name;
+}
+
 const roiBox = computed(() => {
   if (!props.roiDraft.length) return null;
   const xs = props.roiDraft.map((point) => point[0]);
@@ -64,7 +69,7 @@ const roiBox = computed(() => {
           @click="$emit('selectCameraStation', station)"
         >
           <span class="cctv-station-meta">
-            <strong>{{ station.name }}</strong>
+            <strong>{{ stationDisplayName(station) }}</strong>
             <small>{{ station.id }} &middot; {{ station.lines.join(', ') }}</small>
           </span>
           <span class="chip" :class="{ 'chip-muted': !hasCamera(station) }">
@@ -79,7 +84,7 @@ const roiBox = computed(() => {
         <div class="camera-panel-header">
           <div>
             <h3>{{ text.stationCamera }}</h3>
-            <p v-if="selectedCameraStation">{{ selectedCameraStation.name }} &middot; {{ selectedCameraStation.id }}</p>
+            <p v-if="selectedCameraStation">{{ stationDisplayName(selectedCameraStation) }} &middot; {{ selectedCameraStation.id }}</p>
           </div>
           <span class="chip" :class="{ 'chip-muted': !hasCamera(selectedCameraStation) }">
             {{ hasCamera(selectedCameraStation) ? text.configured : text.noCamera }}
@@ -98,13 +103,13 @@ const roiBox = computed(() => {
             v-if="detectorFrameUrl"
             class="camera-preview-media"
             :src="detectorFrameUrl"
-            :alt="selectedCameraStation?.name || 'YOLO detector frame'"
+            :alt="selectedCameraStation ? stationDisplayName(selectedCameraStation) : 'YOLO detector frame'"
           />
           <img
             v-else-if="selectedCameraPreviewKind === 'image' && selectedCameraUrl"
             class="camera-preview-media"
             :src="selectedCameraUrl"
-            :alt="selectedCameraStation?.name || 'Station camera'"
+            :alt="selectedCameraStation ? stationDisplayName(selectedCameraStation) : 'Station camera'"
           />
           <video
             v-else-if="selectedCameraPreviewKind === 'video' && selectedCameraUrl"
