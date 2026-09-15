@@ -158,6 +158,36 @@ test('no credentials means no provider calls/writes; failures and status never e
   assert.equal(JSON.stringify(gps.status()).includes(config.password), false);
 });
 
+test('frequent tracker updates stay fresh and repeated fetches cannot renew expired GPS time', async () => {
+  let clock = timestamp;
+  let rows = [sample];
+  const db = memoryDB();
+  const gps = createGpsService({ config: { ...config, staleMs: 30000 }, vehicles: [vehicle],
+    getDB: () => db, now: () => clock, client: { async getTrackers() { return rows; } } });
+  assert.equal(gps.status().staleAfterMs, 30000);
+  for (let seconds = 0; seconds <= 560; seconds += 5) {
+    clock = timestamp + seconds * 1000;
+    // GPS timestamps advance independently of fetch frequency.
+    rows = [{ ...sample, time: sample.time + Math.floor(seconds / 10) * 10 }];
+    await gps.sync();
+    assert.equal((await gps.buses())[0].connectionStatus, 'fresh', `at ${seconds}s`);
+  }
+  const lastGpsMs = rows[0].time * 1000;
+  clock = lastGpsMs + 30000;
+  await gps.sync();
+  assert.equal((await gps.buses())[0].connectionStatus, 'fresh');
+  clock += 1;
+  await gps.sync();
+  const bus = (await gps.buses())[0];
+  assert.equal(bus.feedHealthy, true);
+  assert.equal(bus.receivedAt, new Date(clock).toISOString());
+  assert.equal(bus.lastGpsAt, new Date(lastGpsMs).toISOString());
+  assert.equal(bus.connectionStatus, 'stale');
+  rows = [{ ...sample, time: Math.floor(clock / 1000) }];
+  await gps.sync();
+  assert.equal((await gps.buses())[0].connectionStatus, 'fresh');
+});
+
 test('concurrent sync calls share one upstream request and one set of database writes', async () => {
   const db = memoryDB();
   let calls = 0, resolve;

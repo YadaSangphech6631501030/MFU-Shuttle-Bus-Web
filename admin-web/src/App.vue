@@ -714,7 +714,7 @@ const emptyStation = (): Station => ({
   nameTH: '',
   lat: 0,
   lng: 0,
-  lines: ['line1'],
+  lines: [],
   waiting: 0,
   status: 'LOW',
   cameraUrl: '',
@@ -1972,13 +1972,10 @@ watch(selectedCameraStationId, () => {
 
       <DashboardPage
         v-if="activeTab === 'dashboard'"
-        :buses="buses"
         :crowd-map-error="crowdMapError"
         :crowd-map-loading="crowdMapLoading"
         :crowd-thresholds="crowdThresholds"
         :online-buses="onlineBuses"
-        :gps-load-failed="gpsLoadFailed"
-        :gps-status="gpsStatus"
         :lang="lang"
         :pending-reports="pendingReports"
         :selected-station-id="selectedCrowdStationId"

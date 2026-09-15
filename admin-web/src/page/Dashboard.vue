@@ -1,14 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import type { Bus, GpsStatus, CrowdThresholds, Station } from '../types';
-import GpsNotice from '../components/GpsStatus.vue';
+import type { CrowdThresholds, Station } from '../types';
 
 type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 
 const props = defineProps<{
-  buses: Bus[];
-  gpsStatus: GpsStatus | null;
-  gpsLoadFailed: boolean;
   lang: 'th' | 'en';
   crowdMapError: string;
   crowdMapLoading: boolean;
@@ -26,10 +22,6 @@ const emit = defineEmits<{
 }>();
 
 const crowdMapEl = ref<HTMLElement | null>(null);
-
-function fillTemplate(template: string, values: Record<string, string | number>) {
-  return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ''));
-}
 
 function stationWaiting(station: Station) {
   const waiting = Number(station.waiting ?? 0);
@@ -86,7 +78,6 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <GpsNotice :status="gpsStatus" :load-failed="gpsLoadFailed" :lang="lang" />
     <section class="dashboard-metric-grid">
       <article class="dashboard-metric-card metric-rose">
         <div>
@@ -103,9 +94,9 @@ onUnmounted(() => {
 
       <article class="dashboard-metric-card metric-blue">
         <div>
-          <span>{{ lang === 'th' ? 'รถที่มีข้อมูล GPS ล่าสุด' : 'Buses with fresh GPS data' }}</span>
+          <span>{{ lang === 'th' ? 'รถรับส่ง' : 'Buses' }}</span>
           <strong>{{ onlineBuses }}</strong>
-          <small>{{ fillTemplate(text.fromTotalBuses, { count: buses.length }) }}</small>
+          <small>{{ lang === 'th' ? 'ข้อมูล GPS ล่าสุด' : 'fresh GPS data' }}</small>
         </div>
         <svg viewBox="0 0 24 24" aria-hidden="true">
           <path d="M7 16h.01" />
