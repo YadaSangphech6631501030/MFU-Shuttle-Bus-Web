@@ -15,6 +15,8 @@ export type ShuttleRoute = {
   nameTH: string;
   color: string;
   enabled: boolean;
+  revision?: number;
+  updatedAt?: string;
   geometry: { type: 'LineString'; coordinates: [number, number][] };
 };
 
@@ -125,11 +127,11 @@ export const api = {
   },
 
   getRoutes() {
-    return request<ShuttleRoute[]>('/api/routes');
+    return request<ShuttleRoute[]>('/api/routes', { cache: 'no-store' });
   },
 
   getStations(line: string) {
-    return request<Station[]>(`/station/${encodeURIComponent(line)}`);
+    return request<Station[]>(`/station/${encodeURIComponent(line)}`, { cache: 'no-store' });
   },
 
   getBuses() {

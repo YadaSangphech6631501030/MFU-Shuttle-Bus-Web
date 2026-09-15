@@ -1,11 +1,11 @@
 <script setup lang="ts">
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { api, type Bus, type Station } from './services/api';
-import busFrontUrl from '../assets/gamcar_front.png';
-import busBackUrl from '../assets/gemcar_back.png';
+import { api, type Bus, type ShuttleRoute, type Station } from './services/api';
 import busLeftUrl from '../assets/gemcar_left.png';
 import busRightUrl from '../assets/gemcar_right.png';
+import busTurnLeftUrl from '../assets/gemcar_turnleft.png';
+import busTurnRightUrl from '../assets/gemcar_turnright.png';
 import busIconUrl from '../assets/bus.png';
 import busStopUrl from '../assets/bus_stop_2.png';
 import thaiFlagUrl from '../assets/thai_flag.png';
@@ -18,9 +18,9 @@ import LanguagePage from './pages/LanguagePage.vue';
 import type { Lang } from './types';
 
 type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language';
-type Line = 'line1' | 'line2';
+type Line = string;
 type RoutePoint = { lat: number; lng: number };
-type BusMarkerEntry = { marker: any; key: string; position: RoutePoint };
+type BusMarkerEntry = { marker: any; key: string; position: RoutePoint; bearing: number | null; line: Line; turnReady: boolean; turnTimer?: number };
 type GoogleMap = any;
 
 declare global {
@@ -41,6 +41,8 @@ const selectedToId = ref('');
 const isTripSearchCollapsed = ref(false);
 const activeSearchField = ref<'from' | 'to'>('to');
 const stations = ref<Station[]>([]);
+const routes = ref<ShuttleRoute[]>([]);
+const routesLoaded = ref(false);
 const buses = ref<Bus[]>([]);
 const favoriteIds = ref<string[]>(JSON.parse(localStorage.getItem(FAVORITES_KEY) || localStorage.getItem(fallbackFavoritesKey) || '[]'));
 const isLoading = ref(false);
@@ -59,6 +61,8 @@ const feedbackFormVersion = ref(0);
 const isFeedbackSubmitting = ref(false);
 const mapElement = ref<HTMLElement | null>(null);
 const selectedRouteAvailable = ref(false);
+const userLocation = ref<RoutePoint | null>(null);
+const locationError = ref('');
 
 let campusMap: GoogleMap = null;
 let mapMarkers: any[] = [];
@@ -74,6 +78,17 @@ let stationPopupTimer: number | undefined;
 let mapRenderGeneration = 0;
 let googleMapsPromise: Promise<void> | null = null;
 let mapResizeObserver: ResizeObserver | null = null;
+let userLocationMarker: any = null;
+let userLocationWatchId: number | undefined;
+let userLocationOverlay: any = null;
+let userLocationOverlayPosition: RoutePoint | null = null;
+
+const userLocationIcon = `data:image/svg+xml;charset=UTF-8,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><circle cx="32" cy="32" r="27" fill="#eeeeee" stroke="#d2232a" stroke-width="3"/><circle cx="32" cy="23" r="8" fill="#d2232a"/><path d="M16 48c2-10 8-16 16-16s14 6 16 16c-8 4-24 4-32 0Z" fill="#d2232a"/></svg>')}`;
+
+const fallbackRoutes: ShuttleRoute[] = [
+  { id: 'line1', name: 'Line 1', nameTH: 'สาย 1', color: '#bc9945', enabled: true, geometry: { type: 'LineString', coordinates: [] } },
+  { id: 'line2', name: 'Line 2', nameTH: 'สาย 2', color: '#777777', enabled: true, geometry: { type: 'LineString', coordinates: [] } },
+];
 
 const dictionary = {
   th: {
@@ -105,6 +120,7 @@ const dictionary = {
   },
 } as const;
 const t = computed(() => dictionary[lang.value]);
+const availableRoutes = computed(() => routesLoaded.value ? routes.value.filter((route) => route.enabled !== false) : fallbackRoutes);
 const visibleStations = computed(() => stations.value.filter((station) => selectedLine.value === 'all' || station.lines?.includes(selectedLine.value)));
 const favoriteStations = computed(() => stations.value.filter((station) => favoriteIds.value.includes(station.id)));
 const fromMatches = computed(() => searchStations(fromQuery.value, 'from'));
@@ -293,14 +309,13 @@ function lineStations(line: Line) {
 }
 
 function filteredLineStations(line: Line) {
-   const query = transitSearch.value[line].trim().toLowerCase(); return lineStations(line).filter((station) => !query || stationName(station).toLowerCase().includes(query) || station.name.toLowerCase().includes(query)); 
+   const query = (transitSearch.value[line] || '').trim().toLowerCase(); return lineStations(line).filter((station) => !query || stationName(station).toLowerCase().includes(query) || station.name.toLowerCase().includes(query));
   }
 
 function busLineKey(bus: Bus): Line | null {
   const line = String(bus.line ?? '').trim().toLowerCase();
-  if (line === 'line1' || line === '1') return 'line1';
-  if (line === 'line2' || line === '2') return 'line2';
-  return null;
+  if (!line) return null;
+  return /^line\d+$/.test(line) ? line : /^\d+$/.test(line) ? `line${line}` : line;
 }
 
 function busMatchesSelectedLine(bus: Bus) {
@@ -423,47 +438,59 @@ function busRouteBearing(bus: Bus, position: RoutePoint, paths: Map<Line, RouteP
 function busIconForDirection(directionRaw: number | null | undefined) {
   if (!Number.isFinite(directionRaw)) return busRightUrl;
   const direction = ((Number(directionRaw) % 360) + 360) % 360;
-  // The front asset faces toward the bottom of the map, so southbound uses front.
-  if (direction < 45 || direction >= 315) return busBackUrl;
-  if (direction < 135) return busRightUrl;
-  if (direction < 225) return busFrontUrl;
-  return busLeftUrl;
+  // The animation intentionally uses only the left and right side assets.
+  return direction < 90 || direction >= 270 ? busRightUrl : busLeftUrl;
 }
 
-// Point the vehicle asset toward the next station, with route-specific orientation rules.
-function busIconForRouteContext(bus: Bus, position: RoutePoint) {
+function busTurnIcon(currentBearing: number, targetBearing: number) {
+  const turn = ((targetBearing - currentBearing + 540) % 360) - 180;
+  if (Math.abs(turn) < 20 || Math.abs(turn) >= 150) return null;
+  return turn > 0 ? busTurnRightUrl : busTurnLeftUrl;
+}
+
+function busTravelBearing(bus: Bus, position: RoutePoint): number | null {
   const line = nearestBusLine(bus, position);
   const path = routePathCache.get(line);
-  if (!path) return busIconForDirection(bus.directionRaw);
-  const busProgress = routeProgressAtPosition(position, path);
-  const routeBearing = routeBearingAtPosition(position, path);
-  if (!busProgress || routeBearing === null) return busIconForDirection(bus.directionRaw);
+  return busRouteBearing(bus, position, path ? new Map([[line, path]]) : new Map());
+}
 
-  const ovalPond = stations.value.find((station) => station.id === 'station09' || station.name.toLowerCase() === 'oval pond');
-  const mSquare = stations.value.find((station) => station.id === 'station14' || station.name.toLowerCase() === 'm-square building');
-  const lamduan = stations.value.find((station) => station.id === 'station01' || station.name.toLowerCase().includes('lamduan dormitory 2'));
-  const ovalProgress = ovalPond ? routeProgressAtPosition(ovalPond, path) : null;
-  const mSquareProgress = mSquare ? routeProgressAtPosition(mSquare, path) : null;
-  const nextStation = busStationSummary(bus, position)?.next;
-  const nextStationBearing = nextStation ? bearingBetween(position, nextStation) : null;
+function setBusMarkerIcon(marker: any, url: string) {
+  marker.setIcon({ url, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) });
+}
 
-  const actualBearing = Number(bus.directionRaw);
-  const heading = Number.isFinite(actualBearing) ? actualBearing : routeBearing;
-  const headingToLamduan = lamduan ? bearingBetween(position, lamduan) : routeBearing;
-  const returningToLamduan = angleDifference(heading, headingToLamduan) <= 90;
-  const nearOvalPond = ovalProgress && Math.abs(busProgress.distanceFromStart - ovalProgress.distanceFromStart) <= 120;
-  const nearMSquare = mSquareProgress && Math.abs(busProgress.distanceFromStart - mSquareProgress.distanceFromStart) <= 120;
+function clearBusMarkers() {
+  busMarkers.forEach(({ marker, turnTimer }) => {
+    if (turnTimer !== undefined) window.clearTimeout(turnTimer);
+    marker.setMap(null);
+  });
+  busMarkers = [];
+}
 
-  if (nextStationBearing !== null) {
-    const nextStationIcon = busIconForDirection(nextStationBearing);
-    // Oval Pond must never show the rear asset.
-    if (nearOvalPond) return nextStationIcon === busBackUrl ? busFrontUrl : nextStationIcon;
-    // Returning from M-Square to Lamduan must never show the front asset.
-    if (nearMSquare && returningToLamduan) return busBackUrl;
-    return nextStationIcon;
+function updateBusTurn(entry: BusMarkerEntry, bus: Bus, position: RoutePoint) {
+  // Ignore stationary GPS jitter. A straight segment rearms the next brief turn animation.
+  const line = nearestBusLine(bus, position);
+  if (distanceMeters(entry.position, position) < 3 && line === entry.line) return;
+  const bearing = busTravelBearing(bus, position);
+  const previous = entry.bearing;
+  const sameLine = line === entry.line;
+  entry.bearing = bearing;
+  entry.line = line;
+  entry.position = position;
+  if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
+  entry.turnTimer = undefined;
+  const sideIcon = busIconForDirection(bearing);
+  const turnIcon = sameLine && previous !== null && bearing !== null ? busTurnIcon(previous, bearing) : null;
+  if (turnIcon && entry.turnReady) {
+    entry.turnReady = false;
+    setBusMarkerIcon(entry.marker, turnIcon);
+    entry.turnTimer = window.setTimeout(() => {
+      setBusMarkerIcon(entry.marker, sideIcon);
+      entry.turnTimer = undefined;
+    }, 900);
+  } else {
+    setBusMarkerIcon(entry.marker, sideIcon);
+    if (!sameLine || previous === null || bearing === null || angleDifference(previous, bearing) < 10) entry.turnReady = true;
   }
-
-  return busIconForDirection(busRouteBearing(bus, position, new Map([[line, path]])));
 }
 
 function closeBusPopup() {
@@ -477,13 +504,14 @@ function nearestBusLine(bus: Bus, position: RoutePoint) {
   const knownLine = busLineKey(bus);
   if (knownLine) return knownLine;
   if (selectedLine.value !== 'all') return selectedLine.value;
-  return (['line1', 'line2'] as Line[]).reduce<Line>((nearestLine, line) => {
+  const lineIds = availableRoutes.value.map((route) => route.id);
+  return lineIds.reduce<Line>((nearestLine, line) => {
     const path = routePathCache.get(line);
     const nearestDistance = path ? routeProgressAtPosition(position, path)?.distanceToPath ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY;
     const currentPath = routePathCache.get(nearestLine);
     const currentDistance = currentPath ? routeProgressAtPosition(position, currentPath)?.distanceToPath ?? Number.POSITIVE_INFINITY : Number.POSITIVE_INFINITY;
     return nearestDistance < currentDistance ? line : nearestLine;
-  }, 'line1');
+  }, lineIds[0] || 'line1');
 }
 
 function busStationSummary(bus: Bus, position: RoutePoint) {
@@ -553,8 +581,7 @@ function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
 }
 
 function renderBusMarkers(paths = routePathCache) {
-  busMarkers.forEach(({ marker }) => marker.setMap(null));
-  busMarkers = [];
+  clearBusMarkers();
   closeBusPopup();
   if (!campusMap || !window.google?.maps) return [];
   const positions: Array<{ lat: number; lng: number }> = [];
@@ -563,8 +590,8 @@ function renderBusMarkers(paths = routePathCache) {
     if (!position) return;
     positions.push(position);
     const marker = new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20,
-      icon: { url: busIconForRouteContext(bus, position), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } });
-    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position };
+      icon: { url: busIconForDirection(busTravelBearing(bus, position)), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } });
+    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position, bearing: busTravelBearing(bus, position), line: nearestBusLine(bus, position), turnReady: true };
     marker.addListener('click', () => {
       const currentPosition = entry.marker.getPosition?.();
       toggleBusPopup(
@@ -595,10 +622,97 @@ function updateLiveBusMarkers() {
 
   visibleBuses.forEach(({ bus, position }, index) => {
     const entry = busMarkers[index];
-    entry.position = position;
+    updateBusTurn(entry, bus, position);
     entry.marker.setPosition(position);
-    entry.marker.setIcon({ url: busIconForRouteContext(bus, position), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) });
   });
+}
+
+// Show the user's real browser location and keep the marker updated while permission remains active.
+function renderUserLocationMarker(position: RoutePoint) {
+  if (!campusMap || !window.google?.maps) return;
+  if (!userLocationMarker) {
+    userLocationMarker = new window.google.maps.Marker({
+      position,
+      map: campusMap,
+      title: lang.value === 'th' ? 'ตำแหน่งปัจจุบันของฉัน' : 'My current location',
+      zIndex: 40,
+      icon: {
+        url: userLocationIcon,
+        scaledSize: new window.google.maps.Size(36, 36),
+        anchor: new window.google.maps.Point(18, 36),
+      },
+    });
+    userLocationMarker.addListener('click', toggleUserLocationPopup);
+  } else {
+    userLocationMarker.setPosition(position);
+    userLocationMarker.setMap(campusMap);
+  }
+}
+
+function closeUserLocationPopup() {
+  if (userLocationOverlay) userLocationOverlay.setMap(null);
+  userLocationOverlay = null;
+  userLocationOverlayPosition = null;
+}
+
+function toggleUserLocationPopup() {
+  if (!userLocation.value || !campusMap || !window.google?.maps) return;
+  if (userLocationOverlay) {
+    closeUserLocationPopup();
+    return;
+  }
+
+  userLocationOverlayPosition = userLocation.value;
+  const overlay = new window.google.maps.OverlayView();
+  overlay.onAdd = () => {
+    const element = document.createElement('div');
+    element.className = 'user-location-popup-host';
+    element.innerHTML = '<div class="user-location-popup">You are here</div>';
+    overlay.element = element;
+    overlay.getPanes().floatPane.appendChild(element);
+  };
+  overlay.draw = () => {
+    if (!overlay.element || !userLocationOverlayPosition) return;
+    const projection = overlay.getProjection();
+    if (!projection) return;
+    const point = projection.fromLatLngToDivPixel(new window.google.maps.LatLng(userLocationOverlayPosition));
+    if (!point) return;
+    overlay.element.style.left = `${point.x}px`;
+    overlay.element.style.top = `${point.y}px`;
+  };
+  overlay.onRemove = () => {
+    overlay.element?.remove();
+    overlay.element = null;
+  };
+  userLocationOverlay = overlay;
+  overlay.setMap(campusMap);
+}
+
+function updateUserLocation(position: GeolocationPosition) {
+  const nextPosition = { lat: position.coords.latitude, lng: position.coords.longitude };
+  const shouldCenterMap = !userLocation.value;
+  userLocation.value = nextPosition;
+  locationError.value = '';
+  renderUserLocationMarker(nextPosition);
+  userLocationOverlayPosition = nextPosition;
+  userLocationOverlay?.draw?.();
+  if (shouldCenterMap && campusMap) campusMap.panTo(nextPosition);
+}
+
+function startUserLocationTracking() {
+  if (!navigator.geolocation) {
+    locationError.value = lang.value === 'th' ? 'อุปกรณ์นี้ไม่รองรับการระบุตำแหน่ง' : 'Location is not supported on this device';
+    return;
+  }
+  if (userLocation.value && campusMap) campusMap.panTo(userLocation.value);
+  if (userLocationWatchId !== undefined) return;
+  userLocationWatchId = navigator.geolocation.watchPosition(
+    updateUserLocation,
+    () => {
+      locationError.value = lang.value === 'th' ? 'ไม่สามารถเข้าถึงตำแหน่งปัจจุบันได้' : 'Unable to access your current location';
+    },
+    { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 },
+  );
 }
 
 // Refresh the bus popup text and anchor when the selected vehicle receives new GPS data.
@@ -631,7 +745,7 @@ function distanceMeters(
 
 // Estimate arrival from the nearest fresh bus, route distance, and its live speed.
 function stationArrivalMinutes(station: Station) {
-  const lines = (station.lines || []).filter((line): line is Line => line === 'line1' || line === 'line2');
+  const lines = (station.lines || []).filter((line): line is Line => Boolean(line));
   const estimates = lines.map((line) => stationArrivalMinutesForLine(station, line)).filter((value): value is number => value !== null);
   if (estimates.length) return Math.min(...estimates);
   return stationArrivalMinutesForLine(station);
@@ -777,10 +891,19 @@ function loadGoogleMapsScript() {
 }
 
 function removeMapOverlays() { 
-  [...mapMarkers, ...mapPolylines, ...busMarkers.map(({ marker }) => marker)].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; closeBusPopup();
+  clearBusMarkers();
+  [...mapMarkers, ...mapPolylines, ...busMarkers.map(({ marker }) => marker)].forEach((item) => item.setMap(null));
+  userLocationMarker?.setMap(null);
+  userLocationMarker = null;
+  closeUserLocationPopup();
+  mapMarkers = []; mapPolylines = []; busMarkers = []; closeBusPopup();
 }
 
 async function loadRoute(line: Line) { 
+  const remoteRoute = routes.value.find((route) => route.id === line && route.enabled !== false);
+  if (routesLoaded.value) {
+    return remoteRoute?.geometry?.coordinates?.map(([lng, lat]) => ({ lat, lng })) || [];
+  }
   try { const response = await fetch(new URL(`../assets/routes/polyline_${line}_mfu.geojson`, import.meta.url)); 
     const geojson = await response.json(); const coordinates = geojson.features?.flatMap((feature: any) => feature.geometry?.coordinates || []) || geojson.geometry?.coordinates || []; 
     return coordinates.map(([lng, lat]: number[]) => ({ lat, lng })); } 
@@ -793,8 +916,8 @@ async function renderGoogleMap() {
   if (campusMap.getDiv?.() !== mapElement.value) return;
   const generation = ++mapRenderGeneration;
   const lineSelection = selectedLine.value;
-  const lines: readonly Line[] = lineSelection === 'all' ? ['line1', 'line2'] : [lineSelection];
-  const colors: Record<Line, string> = { line1: '#bc9945', line2: '#5f6368' };
+  const lines: readonly Line[] = lineSelection === 'all' ? availableRoutes.value.map((route) => route.id) : [lineSelection];
+  const colors: Record<Line, string> = Object.fromEntries(availableRoutes.value.map((route) => [route.id, route.color])) as Record<Line, string>;
   const points: Array<{ lat: number; lng: number }> = [];
   const selectedFrom = stations.value.find((station) => station.id === selectedFromId.value);
   const selectedTo = stations.value.find((station) => station.id === selectedToId.value);
@@ -857,9 +980,10 @@ async function renderGoogleMap() {
       }));
     }
   }
+  if (userLocation.value) renderUserLocationMarker(userLocation.value);
 }
 async function overviewMinimumZoom() {
-    const routes = await Promise.all([loadRoute('line1'), loadRoute('line2')]);
+    const routes = await Promise.all(availableRoutes.value.map((route) => loadRoute(route.id)));
     const routePoints = routes.flat();
     const element = mapElement.value;
     if (element && routePoints.length) {
@@ -913,7 +1037,7 @@ async function initGoogleMap() {
       mapResizeObserver.observe(mapElement.value);
     }
     window.google.maps.event.addListenerOnce(campusMap, 'idle', () => { if (mapElement.value) mapElement.value.style.opacity = '1'; });
-    campusMap.addListener('click', () => { closeStationPopup(); if (selectedLine.value !== 'all') selectedLine.value = 'all'; });
+    campusMap.addListener('click', () => { closeStationPopup(); closeUserLocationPopup(); if (selectedLine.value !== 'all') selectedLine.value = 'all'; });
     await renderGoogleMap();
   } catch (error) {
     if (mapElement.value) mapElement.value.style.opacity = '1';
@@ -939,6 +1063,37 @@ async function ensureHomeMap() {
 }
 let liveBusTimer: number | undefined;
 let liveBusRequestActive = false;
+let publicDataTimer: number | undefined;
+let publicDataRequestActive = false;
+
+function combinePublicStations(stationLists: Station[][]) {
+  const stationMap = new Map<string, Station>();
+  stationLists.flat().forEach((station) => {
+    const old = stationMap.get(station.id);
+    stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station);
+  });
+  return [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+}
+
+function routeIdsForData(routeList: ShuttleRoute[] | null) {
+  if (routeList === null) return ['line1', 'line2'];
+  return routeList.filter((route) => route.enabled !== false).map((route) => route.id);
+}
+
+function syncRouteControls(routeList: ShuttleRoute[] | null) {
+  routeIdsForData(routeList).forEach((line) => {
+    if (expandedLines.value[line] === undefined) expandedLines.value[line] = false;
+    if (transitSearch.value[line] === undefined) transitSearch.value[line] = '';
+  });
+  if (selectedLine.value !== 'all' && !routeIdsForData(routeList).includes(selectedLine.value)) selectedLine.value = 'all';
+}
+
+function publicDataSignature(nextStations: Station[], nextRoutes: ShuttleRoute[]) {
+  return JSON.stringify({
+    stations: nextStations.map(({ id, name, nameTH, lat, lng, lines, waiting, status }) => ({ id, name, nameTH, lat, lng, lines, waiting, status })),
+    routes: nextRoutes.map(({ id, name, nameTH, color, enabled, geometry, revision, updatedAt }) => ({ id, name, nameTH, color, enabled, geometry, revision, updatedAt })),
+  });
+}
 
 async function refreshLiveBusData() {
   if (liveBusRequestActive) return;
@@ -955,15 +1110,44 @@ async function refreshLiveBusData() {
   }
 }
 
-async function loadData() { isLoading.value = true; message.value = ''; try { const [line1, line2, busList] = await Promise.all([api.getStations('line1'), api.getStations('line2'), api.getBuses().catch(() => [])]); const stationMap = new Map<string, Station>(); [...line1, ...line2].forEach((station) => { const old = stationMap.get(station.id); stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station); }); stations.value = [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); buses.value = busList; } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
-onMounted(async () => { await loadData(); await initGoogleMap(); liveBusTimer = window.setInterval(() => void refreshLiveBusData(), 5000); });
+async function refreshPublicData() {
+  if (publicDataRequestActive) return;
+  publicDataRequestActive = true;
+  try {
+    const routeList = await api.getRoutes();
+    const nextStations = combinePublicStations(await Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))));
+    if (publicDataSignature(nextStations, routeList) === publicDataSignatureValue) return;
+
+    // Reload admin changes without a full page refresh. Clearing the route cache makes the map use new geometry.
+    stations.value = nextStations;
+    routes.value = routeList;
+    routesLoaded.value = true;
+    syncRouteControls(routeList);
+    routePathCache.clear();
+    if (stationDetail.value) closeStationPopup();
+    publicDataSignatureValue = publicDataSignature(nextStations, routeList);
+  } catch {
+    // Keep the current station and route data when a background refresh fails.
+  } finally {
+    publicDataRequestActive = false;
+  }
+}
+
+let publicDataSignatureValue = '';
+
+async function loadData() { isLoading.value = true; message.value = ''; try { const routeList = await api.getRoutes().catch(() => null); const [stationLists, busList] = await Promise.all([Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))), api.getBuses().catch(() => [])]); const nextStations = combinePublicStations(stationLists); stations.value = nextStations; buses.value = busList; routes.value = routeList || []; routesLoaded.value = routeList !== null; syncRouteControls(routeList); publicDataSignatureValue = publicDataSignature(nextStations, routes.value); } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
+onMounted(async () => { await loadData(); await initGoogleMap(); startUserLocationTracking(); liveBusTimer = window.setInterval(() => void refreshLiveBusData(), 5000); publicDataTimer = window.setInterval(() => void refreshPublicData(), 15000); });
 onBeforeUnmount(() => {
+  clearBusMarkers();
   mapResizeObserver?.disconnect();
   if (liveBusTimer) window.clearInterval(liveBusTimer);
+  if (publicDataTimer) window.clearInterval(publicDataTimer);
+  if (userLocationWatchId !== undefined) navigator.geolocation?.clearWatch(userLocationWatchId);
+  closeUserLocationPopup();
   clearTimeout(successModalTimer);
 });
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
-watch([selectedLine, stations, selectedFromId, selectedToId], () => {
+watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
   selectedRouteAvailable.value = false;
   void renderGoogleMap();
 }, { deep: true });
@@ -1001,14 +1185,14 @@ watch([selectedLine, stations, selectedFromId, selectedToId], () => {
 
   <section v-if="page === 'home'" class="screen home-screen"><div ref="mapElement" class="campus-map google-map" role="application" aria-label="MFU campus map"><div v-if="mapError" class="map-error">{{ mapError.includes('API_KEY') ? t.mapKeyMissing : t.mapLoadFailed }}</div></div>
       <div v-if="isTripSearchCollapsed" class="collapsed-trip" @click="isTripSearchCollapsed = false"><strong>{{ fromQuery }} <span>→</span> {{ toQuery }}</strong><span>⌄</span></div><div v-else class="trip-card"><div class="trip-marker-column" aria-hidden="true"><span class="origin-marker"></span><i></i><span class="destination-marker"></span></div><div class="trip-fields"><label><span>{{ t.from }}</span><div class="input-wrap"><input v-model="fromQuery" :placeholder="t.fromStation" @focus="activeSearchField = 'from'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedFromId = ''; showStationSuggestions = true" /><button v-if="fromQuery" class="clear-input" type="button" @click="clearStation('from')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'from'" class="suggestions"><button v-for="station in fromMatches" :key="station.id" type="button" @click="setStation('from', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div><label><span>{{ t.to }}</span><div class="input-wrap"><input v-model="toQuery" :placeholder="t.toStation" @focus="activeSearchField = 'to'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedToId = ''; showStationSuggestions = true" /><button v-if="toQuery" class="clear-input" type="button" @click="clearStation('to')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'to'" class="suggestions"><button v-for="station in toMatches" :key="station.id" type="button" @click="setStation('to', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div></div><div class="trip-actions"><button v-if="selectedFromId && selectedToId" class="icon-action" type="button" @click="isTripSearchCollapsed = true">⌃</button><button class="icon-action" type="button" :disabled="!fromQuery && !toQuery" :aria-label="t.swap" @click="swapStations">⇅</button></div></div>
-      <div class="line-selector"><button :class="{ active: selectedLine === 'line1' }" type="button" @click.stop="selectedLine = 'line1'"><img :src="busIconUrl" alt="" />{{ t.line1 }}</button><button :class="{ 'line-two-active': selectedLine === 'line2' }" type="button" @click.stop="selectedLine = 'line2'"><img :src="busIconUrl" alt="" />{{ t.line2 }}</button></div>
+      <div class="line-selector"><button v-for="route in availableRoutes" :key="route.id" :class="{ active: selectedLine === route.id, 'line-two-active': route.id === 'line2' && selectedLine === route.id }" type="button" @click.stop="selectedLine = route.id"><img :src="busIconUrl" alt="" :style="{ filter: route.id === 'line2' ? 'grayscale(1)' : undefined }" />{{ route.id === 'line1' ? t.line1 : route.id === 'line2' ? t.line2 : (lang === 'th' ? route.nameTH || route.name : route.name) }}</button></div>
 
       <div v-if="tripEstimate && isTripSearchCollapsed" class="trip-estimate"><div class="trip-estimate-head"><div class="trip-estimate-title"><strong>{{ t.tripSummary }}</strong><button class="trip-estimate-close" type="button" :aria-label="t.close" @click="resetTrip">×</button></div><span>{{ fromQuery }} <b>→</b> {{ toQuery }}</span></div><template v-if="tripEstimate.available"><div class="trip-estimate-row"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><path d="M5 17h14M6 17V7c0-1.1.9-2 2-2h8c1.1 0 2 .9 2 2v10M4 17h16v2H4zM8 9h8M7 13h.01M17 13h.01M8 19v1M16 19v1" /></svg></span><strong>{{ t.busArrival }}</strong><b>{{ minuteText(tripEstimate.arrivalMinutes) }}</b></div><div class="trip-estimate-row"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span><strong>{{ t.rideTime }}</strong><b>{{ tripEstimate.rideMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row total"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="13" r="7" /><path d="M12 13V9M9 3h6M12 3v3M17 6l2-2" /></svg></span><strong>{{ t.totalTime }}</strong><b>{{ minuteText(tripEstimate.totalMinutes) }}</b></div></template><p v-else class="trip-estimate-unavailable">{{ t.noDirectRoute }}</p></div>
 
     </section>
 
     <!-- Transit page: browse shuttle bus lines and stations. -->
-    <TransitPage v-else-if="page === 'transit'" :t="t" :is-loading="isLoading" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
+    <TransitPage v-else-if="page === 'transit'" :t="t" :lang="lang" :is-loading="isLoading" :routes="routes" :routes-loaded="routesLoaded" :expanded-lines="expandedLines" :transit-search="transitSearch" :line-stations="lineStations" :filtered-line-stations="filteredLineStations" :station-name="stationName" @select="selectTransitStation" />
     <!-- Favorites page: manage saved stations. -->
     <FavoritesPage v-else-if="page === 'favorites'" :t="t" :favorite-stations="favoriteStations" :station-name="stationName" @add="showStationPicker = true" @remove="askRemoveFavorite" />
     <!-- Feedback page: submit a complete feedback form directly. -->
