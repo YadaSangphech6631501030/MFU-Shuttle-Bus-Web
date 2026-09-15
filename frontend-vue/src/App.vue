@@ -20,6 +20,7 @@ import type { Lang } from './types';
 type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language';
 type Line = 'line1' | 'line2';
 type RoutePoint = { lat: number; lng: number };
+type BusMarkerEntry = { marker: any; key: string; position: RoutePoint };
 type GoogleMap = any;
 
 declare global {
@@ -62,9 +63,10 @@ const selectedRouteAvailable = ref(false);
 let campusMap: GoogleMap = null;
 let mapMarkers: any[] = [];
 let mapPolylines: any[] = [];
-let busMarkers: any[] = [];
+let busMarkers: BusMarkerEntry[] = [];
 let busOverlay: any = null;
 let busOverlayKey = '';
+let busOverlayPosition: RoutePoint | null = null;
 let stationOverlay: any = null;
 const routePathCache = new Map<Line, RoutePoint[]>();
 let stationOverlayStationId = '';
@@ -468,6 +470,7 @@ function closeBusPopup() {
   if (busOverlay) busOverlay.setMap(null);
   busOverlay = null;
   busOverlayKey = '';
+  busOverlayPosition = null;
 }
 
 function nearestBusLine(bus: Bus, position: RoutePoint) {
@@ -522,6 +525,7 @@ function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
 
 
   closeBusPopup();
+  busOverlayPosition = position;
   const overlay = new window.google.maps.OverlayView();
   overlay.onAdd = () => {
     const element = document.createElement('div');
@@ -534,7 +538,7 @@ function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
     if (!overlay.element) return;
     const projection = overlay.getProjection();
     if (!projection) return;
-    const point = projection.fromLatLngToDivPixel(new window.google.maps.LatLng(position));
+    const point = projection.fromLatLngToDivPixel(new window.google.maps.LatLng(busOverlayPosition || position));
     if (!point) return;
     overlay.element.style.left = `${point.x}px`;
     overlay.element.style.top = `${point.y}px`;
@@ -549,7 +553,7 @@ function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
 }
 
 function renderBusMarkers(paths = routePathCache) {
-  busMarkers.forEach(marker => marker.setMap(null));
+  busMarkers.forEach(({ marker }) => marker.setMap(null));
   busMarkers = [];
   closeBusPopup();
   if (!campusMap || !window.google?.maps) return [];
@@ -560,10 +564,56 @@ function renderBusMarkers(paths = routePathCache) {
     positions.push(position);
     const marker = new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20,
       icon: { url: busIconForRouteContext(bus, position), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } });
-    marker.addListener('click', () => toggleBusPopup(bus, position));
-    busMarkers.push(marker);
+    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position };
+    marker.addListener('click', () => {
+      const currentPosition = entry.marker.getPosition?.();
+      toggleBusPopup(
+        buses.value.find((item) => (item.busId || item.busNumber || item.name) === entry.key) || bus,
+        currentPosition ? { lat: currentPosition.lat(), lng: currentPosition.lng() } : entry.position,
+      );
+    });
+    busMarkers.push(entry);
   });
   return positions;
+}
+
+// Keep visible bus markers and open popups synchronized with the latest GPS response.
+function updateLiveBusMarkers() {
+  if (!campusMap || !window.google?.maps) return;
+  const visibleBuses = buses.value
+    .filter(busMatchesSelectedLine)
+    .map((bus) => ({ bus, position: busPosition(bus) }))
+    .filter((item): item is { bus: Bus; position: RoutePoint } => item.position !== null);
+  const nextKeys = visibleBuses.map(({ bus, position }) => bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`);
+  const currentKeys = busMarkers.map(({ key }) => key);
+
+  // Rebuild only when a bus becomes visible or stale; normal GPS updates move existing markers in place.
+  if (nextKeys.length !== currentKeys.length || nextKeys.some((key, index) => key !== currentKeys[index])) {
+    renderBusMarkers();
+    return;
+  }
+
+  visibleBuses.forEach(({ bus, position }, index) => {
+    const entry = busMarkers[index];
+    entry.position = position;
+    entry.marker.setPosition(position);
+    entry.marker.setIcon({ url: busIconForRouteContext(bus, position), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) });
+  });
+}
+
+// Refresh the bus popup text and anchor when the selected vehicle receives new GPS data.
+function refreshBusPopup() {
+  if (!busOverlayKey || !busOverlay) return;
+  const entry = busMarkers.find(({ key }) => key === busOverlayKey);
+  const bus = buses.value.find((item) => (item.busId || item.busNumber || item.name) === busOverlayKey);
+  if (!entry || !bus) {
+    closeBusPopup();
+    return;
+  }
+  busOverlayPosition = entry.position;
+  const element = busOverlay.element as HTMLElement | undefined;
+  if (element) element.innerHTML = busPopupHtml(bus, entry.position);
+  busOverlay.draw?.();
 }
 
 function distanceMeters(
@@ -665,7 +715,7 @@ function escapeHtml(value: string) {
 }
 
 const popupIcons = {
-  bus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16c0 .88.39 1.67 1 2.22V20c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1h8v1c0 .55.45 1 1 1h1c.55 0 1-.45 1-1v-1.78c.61-.55 1-1.34 1-2.22V6c0-3.5-3.58-4-8-4S4 2.5 4 6v10Z"/><path d="M6 6h12v6H6zM4 14h16"/><circle cx="7.5" cy="16.5" r="1"/><circle cx="16.5" cy="16.5" r="1"/></svg>',
+  bus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6.5A4.5 4.5 0 0 1 9.5 2h5A4.5 4.5 0 0 1 19 6.5V17c0 .75-.4 1.4-1 1.75V20a1 1 0 0 1-2 0v-1H8v1a1 1 0 0 1-2 0v-1.25c-.6-.35-1-.99-1-1.75V6.5Z" fill="currentColor"/><rect x="7" y="6" width="10" height="5" rx="1" fill="#fff"/><circle cx="8.5" cy="15.5" r="1.25" fill="#fff"/><circle cx="15.5" cy="15.5" r="1.25" fill="#fff"/></svg>',
   people: '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0M14 18a4 4 0 0 1 6.5 1"/></svg>',
   location: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s7-6.1 7-12a7 7 0 1 0-14 0c0 5.9 7 12 7 12Z"/><circle cx="12" cy="9" r="2.5"/></svg>',
   heart: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 8.8c0 5.2-8.8 10.2-8.8 10.2S3.2 14 3.2 8.8A4.8 4.8 0 0 1 12 6.2a4.8 4.8 0 0 1 8.8 2.6Z"/></svg>',
@@ -727,7 +777,7 @@ function loadGoogleMapsScript() {
 }
 
 function removeMapOverlays() { 
-  [...mapMarkers, ...mapPolylines, ...busMarkers].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; closeBusPopup();
+  [...mapMarkers, ...mapPolylines, ...busMarkers.map(({ marker }) => marker)].forEach((item) => item.setMap(null)); mapMarkers = []; mapPolylines = []; busMarkers = []; closeBusPopup();
 }
 
 async function loadRoute(line: Line) { 
@@ -887,10 +937,29 @@ async function ensureHomeMap() {
   window.google?.maps?.event.trigger(campusMap, 'resize');
   await renderGoogleMap();
 }
+let liveBusTimer: number | undefined;
+let liveBusRequestActive = false;
+
+async function refreshLiveBusData() {
+  if (liveBusRequestActive) return;
+  liveBusRequestActive = true;
+  try {
+    buses.value = await api.getBuses();
+    updateLiveBusMarkers();
+    refreshStationPopup();
+    refreshBusPopup();
+  } catch {
+    // Keep the last known positions visible when one polling request fails.
+  } finally {
+    liveBusRequestActive = false;
+  }
+}
+
 async function loadData() { isLoading.value = true; message.value = ''; try { const [line1, line2, busList] = await Promise.all([api.getStations('line1'), api.getStations('line2'), api.getBuses().catch(() => [])]); const stationMap = new Map<string, Station>(); [...line1, ...line2].forEach((station) => { const old = stationMap.get(station.id); stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station); }); stations.value = [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true })); buses.value = busList; } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
-onMounted(async () => { await loadData(); await initGoogleMap(); });
+onMounted(async () => { await loadData(); await initGoogleMap(); liveBusTimer = window.setInterval(() => void refreshLiveBusData(), 5000); });
 onBeforeUnmount(() => {
   mapResizeObserver?.disconnect();
+  if (liveBusTimer) window.clearInterval(liveBusTimer);
   clearTimeout(successModalTimer);
 });
 watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });

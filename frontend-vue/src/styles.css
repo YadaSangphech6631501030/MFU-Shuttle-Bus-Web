@@ -215,6 +215,8 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .station-map-popup-icon { width: 25px; height: 25px; display: grid; place-items: center; border-radius: 50%; font-size: 15px; }
 .station-map-popup-icon.bus, .station-map-popup-icon.people, .station-map-popup-icon.location { background: rgba(210,35,42,.1); color: var(--mfu-red); }
 .station-map-popup-icon svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.station-map-popup-icon.bus { border-radius: 8px; background: rgba(210,35,42,.1); }
+.station-map-popup-icon.bus svg { width: 19px; height: 19px; fill: currentColor; stroke: none; }
 .station-map-popup-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; }
 .station-map-popup-row b { color: #777; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .station-map-popup-status { padding: 3px 7px; border-radius: 999px; text-align: center; }
