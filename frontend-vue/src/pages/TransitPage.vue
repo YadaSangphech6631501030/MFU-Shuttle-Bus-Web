@@ -1,17 +1,21 @@
 <script setup lang="ts">
 // Displays shuttle bus lines and their station lists.
-import type { Station } from '../services/api';
+import { computed } from 'vue';
+import type { ShuttleRoute, Station } from '../services/api';
 
-type Line = 'line1' | 'line2';
+type Line = string;
 
-const routes: Array<{ id: Line; color: string }> = [
-  { id: 'line1', color: '#bc9945' },
-  { id: 'line2', color: '#777777' },
+const fallbackRoutes: ShuttleRoute[] = [
+  { id: 'line1', name: 'Line 1', nameTH: 'สาย 1', color: '#bc9945', enabled: true, geometry: { type: 'LineString', coordinates: [] } },
+  { id: 'line2', name: 'Line 2', nameTH: 'สาย 2', color: '#777777', enabled: true, geometry: { type: 'LineString', coordinates: [] } },
 ];
 
-defineProps<{
+const props = defineProps<{
   t: any;
+  lang: 'en' | 'th';
   isLoading: boolean;
+  routes: ShuttleRoute[];
+  routesLoaded: boolean;
   expandedLines: Record<Line, boolean>;
   transitSearch: Record<Line, string>;
   lineStations: (line: Line) => Station[];
@@ -19,17 +23,27 @@ defineProps<{
   stationName: (station: Station) => string;
 }>();
 
+const visibleRoutes = computed(() => props.routesLoaded ? props.routes : fallbackRoutes);
+
 const emit = defineEmits<{ select: [station: Station] }>();
 
-function routeName(route: { id: Line }, t: any) {
-  return route.id === 'line1' ? t.line1 : t.line2;
+function routeName(route: ShuttleRoute, t: any, lang: 'en' | 'th') {
+  if (route.id === 'line1') return t.line1;
+  if (route.id === 'line2') return t.line2;
+  return lang === 'th' ? route.nameTH || route.name || route.id : route.name || route.id;
+}
+
+function routeSubtitle(route: ShuttleRoute, t: any, lang: 'en' | 'th') {
+  if (route.id === 'line1') return t.mainRoute;
+  if (route.id === 'line2') return t.medicalRoute;
+  return lang === 'th' ? route.nameTH || route.name || route.id : route.name || route.id;
 }
 </script>
 
 <template>
   <section class="screen page-screen">
     <div v-if="isLoading" class="loading-state">{{ t.loading }}</div>
-    <article v-for="route in routes" :key="route.id" class="line-section" :class="route.id">
+    <article v-for="route in visibleRoutes" :key="route.id" class="line-section" :class="route.id">
       <button class="line-section-head" type="button" @click="expandedLines[route.id] = !expandedLines[route.id]">
         <span class="line-circle" :style="{ color: route.color }">
           <svg class="solid-bus-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -39,7 +53,7 @@ function routeName(route: { id: Line }, t: any) {
             <circle cx="16.5" cy="16" r="1.2" fill="#fff" />
           </svg>
         </span>
-        <span><strong>{{ routeName(route, t) }}</strong><small>{{ route.id === 'line1' ? t.mainRoute : t.medicalRoute }} · {{ lineStations(route.id).length }} {{ t.stations }}</small></span>
+        <span><strong>{{ routeName(route, t, lang) }}</strong><small>{{ routeSubtitle(route, t, lang) }} · {{ lineStations(route.id).length }} {{ t.stations }}</small></span>
         <svg class="expand-icon" :class="{ expanded: expandedLines[route.id] }" viewBox="0 0 24 24" aria-hidden="true">
           <path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" />
         </svg>

@@ -230,6 +230,9 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .bus-map-popup-number { color: #777; font-size: 13px; font-weight: 700; }
 .bus-map-popup-number strong { color: var(--mfu-red); font-size: 18px; font-weight: 800; }
 .bus-map-popup-route { width: 100%; margin-top: 5px; padding-top: 7px; border-top: 1px solid #ededed; color: #333; font-size: 11px; line-height: 1.45; text-align: left; }
+.user-location-popup-host { position: absolute; z-index: 31; transform: translate(-50%, calc(-100% - 48px)); pointer-events: none; }
+.user-location-popup { position: relative; padding: 8px 12px; border: 1px solid rgba(210,35,42,.2); border-radius: 10px; background: rgba(255,255,255,.98); box-shadow: 0 5px 16px rgba(0,0,0,.18); color: var(--mfu-red); font-size: 13px; font-weight: 700; white-space: nowrap; }
+.user-location-popup::after { content: ''; position: absolute; left: 50%; bottom: -6px; width: 11px; height: 11px; transform: translateX(-50%) rotate(45deg); border-right: 1px solid #ededed; border-bottom: 1px solid #ededed; background: #fff; }
 
 .page-screen { max-width: 940px; margin: 0 auto; padding: 26px 24px 42px; overflow: auto; background: #fff; }
 .loading-state, .empty-state { padding: 40px 16px; color: #777; text-align: center; }
