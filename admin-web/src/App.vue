@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { api } from './services/api';
+import { supabase } from './services/supabase';
+import { startBusFeed } from './services/busFeed';
 import BusesPage from './page/Buses.vue';
 import DashboardPage from './page/Dashboard.vue';
 import ReportsPage from './page/Reports.vue';
@@ -704,6 +706,7 @@ const buses = ref<Bus[]>([]);
 const gpsStatus = ref<GpsStatus | null>(null);
 const gpsLoadFailed = ref(false);
 let busRefreshTimer: number | undefined;
+let busFeed: ReturnType<typeof startBusFeed<Bus>> | undefined;
 let busRefreshBusy = false;
 const reports = ref<Report[]>([]);
 const users = ref<User[]>([]);
@@ -1482,7 +1485,6 @@ async function withLoading(task: () => Promise<void>) {
 }
 
 async function loadData() {
-  void refreshBuses();
   await withLoading(async () => {
     const [stationData, reportData, userData, routeData] = await Promise.all([
       api.getStations(),
@@ -1499,24 +1501,45 @@ async function loadData() {
   });
 }
 
+function syncBusFeed() {
+  busFeed?.stop();
+  busFeed = undefined;
+  if (!isLoggedIn.value) return;
+  busFeed = startBusFeed<Bus>({
+    client: supabase,
+    loadSnapshot: signal => api.getBusSnapshot(signal),
+    onBuses: nextBuses => {
+      buses.value = nextBuses;
+      gpsLoadFailed.value = false;
+    },
+    onError: () => {
+      gpsLoadFailed.value = true;
+      buses.value = buses.value.map(bus => ({ ...bus, connectionStatus: 'unknown', feedHealthy: false }));
+    },
+  });
+  void refreshBuses();
+}
+
+// Admin-only diagnostics are not broadcast to passenger browsers.
 async function refreshBuses() {
   if (!isLoggedIn.value || busRefreshBusy) return;
   busRefreshBusy = true;
   const session = api.token;
   try {
-    const [busData, status] = await Promise.all([api.getBuses(), api.getGpsStatus()]);
-    if (api.token !== session || !isLoggedIn.value) return;
-    buses.value = busData;
-    gpsStatus.value = status;
-    gpsLoadFailed.value = false;
+    const status = await api.getGpsStatus();
+    if (api.token === session && isLoggedIn.value) gpsStatus.value = status;
   } catch {
-    if (api.token !== session || !isLoggedIn.value) return;
-    gpsLoadFailed.value = true;
-    buses.value = buses.value.map(bus => ({ ...bus, connectionStatus: 'unknown', feedHealthy: false }));
+    // Bus snapshots have their own fallback and error handling.
   } finally {
     busRefreshBusy = false;
   }
 }
+
+function refreshBusFeedOnReturn() {
+  if (document.visibilityState === 'visible') void busFeed?.refresh();
+}
+
+watch(isLoggedIn, syncBusFeed);
 
 // Refresh on return to the browser tab, including after network reconnection.
 function refreshVisibleFeedback() {
@@ -1666,7 +1689,10 @@ async function deleteUser(user: User) {
 }
 
 onMounted(() => {
-  busRefreshTimer = window.setInterval(() => { void refreshBuses(); }, 5000);
+  syncBusFeed();
+  busRefreshTimer = window.setInterval(() => { void refreshBuses(); }, 30000);
+  window.addEventListener('online', refreshBusFeedOnReturn);
+  document.addEventListener('visibilitychange', refreshBusFeedOnReturn);
   document.addEventListener('click', closeUserMenu);
   document.addEventListener('visibilitychange', refreshVisibleFeedback);
   window.addEventListener('focus', refreshVisibleFeedback);
@@ -1699,6 +1725,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.clearInterval(busRefreshTimer);
+  busFeed?.stop();
+  window.removeEventListener('online', refreshBusFeedOnReturn);
+  document.removeEventListener('visibilitychange', refreshBusFeedOnReturn);
   document.removeEventListener('click', closeUserMenu);
   document.removeEventListener('visibilitychange', refreshVisibleFeedback);
   window.removeEventListener('focus', refreshVisibleFeedback);

@@ -65,7 +65,7 @@ erDiagram
 
 ### 3.1 Users To Reports
 
-ปัจจุบัน report ที่สร้างจาก Flutter app ถูกบันทึกเป็น guest:
+ปัจจุบัน report ที่สร้างจาก Vue passenger web ถูกบันทึกเป็น guest:
 
 ```js
 reporterType: "guest"

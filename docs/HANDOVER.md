@@ -1,185 +1,143 @@
-# MFU Shuttle Bus Handover Checklist
+# คู่มือรับช่วงพัฒนา MFU Shuttle Bus Web
 
-เอกสารนี้เป็น checklist สำหรับเตรียมส่งมอบระบบ MFU Shuttle Bus
+อัปเดตตามโค้ดวันที่ 16 กันยายน 2026 เริ่มจากเอกสารนี้สำหรับสมาชิกทีมที่เพิ่งรับโค้ด
 
-## 1. ไฟล์ที่ควรส่งมอบ
+## ระบบที่ต้องรัน
 
-- Source code ทั้ง repository
-- `README.md`
-- `docs/projectmap.md`
-- `docs/prd.md`
-- `docs/agent.md`
-- `docs/er.md`
-- `docs/data.md`
-- `docs/HANDBOOK.md`
-- `docs/DOCKER.md`
-- `docs/HANDOVER.md`
-- `docs/AI-WORKFLOW.md`
-- `.env.example` หรือไฟล์ตัวอย่าง environment
-- รายการบัญชีสำหรับทดสอบ
-- Screenshot หรือวิดีโอ demo ถ้าต้องส่งประกอบรายงาน
+| ส่วน | เทคโนโลยี | Local URL ตามคำสั่งด้านล่าง |
+|---|---|---|
+| Backend | Node.js / Express | http://localhost:5101 |
+| ผู้ดูแลระบบ | Vue 3 / Vite ใน `admin-web/` | http://localhost:5173 |
+| ผู้โดยสาร | Vue 3 / Vite ใน `frontend-vue/` | http://localhost:5174 |
+| ฐานข้อมูล | MongoDB | mongodb://localhost:27017/ |
+| Realtime รถ | Supabase Broadcast | ใช้โปรเจกต์ Supabase ของทีม |
 
-## 2. สิ่งที่ไม่ควรส่งมอบ
+ข้อมูลหลักยังอยู่ MongoDB (`shuttlebus_web_system` โดยค่าเริ่มต้น) Supabase ใช้ส่งข้อมูลรถที่เปลี่ยนเท่านั้น ยังไม่ได้ย้ายฐานข้อมูล และไม่ต้องสร้าง Storage Bucket
+เว็บผู้โดยสารและแอดมินเป็น Vue; ไม่ต้องติดตั้ง Flutter เพื่อรันเว็บสองส่วนนี้
 
-- `node_modules/`
-- `.dart_tool/`
-- `build/`
-- `dist/` ถ้าไม่ได้ต้องการส่ง build artifact
-- `.env` ที่มี key จริง
-- Google Maps API key จริงในเอกสารสาธารณะ
-- MongoDB volume หรือข้อมูลส่วนตัวที่ไม่จำเป็น
+## 1. ขอข้อมูลจากคนส่งงาน
 
-## 3. Environment ที่ต้องเตรียม
+- โค้ดชุดล่าสุด รวมไฟล์ใหม่และ lockfile ของทั้งสามโฟลเดอร์ ตรวจให้แน่ใจว่าการแก้ไขถูก commit/push ก่อนให้เพื่อน pull
+- ค่า environment ผ่านช่องทางส่วนตัวของทีม: MongoDB, JWT secret, Google Maps key, Supabase URL/keys และ GPS account
+- บัญชีแอดมินสำหรับสภาพแวดล้อมทดสอบ
+- ยืนยันว่าทีมใช้ MongoDB และ Supabase โปรเจกต์ไหน และใครเป็นผู้รัน GPS worker
+- ถ้าต้องดู Dashboard ของ Supabase ให้เจ้าของเชิญบัญชีของเพื่อนเข้า Organization ไม่แชร์รหัสผ่านบัญชีเจ้าของ
 
-เครื่องที่จะรันระบบควรมี
+ผู้พัฒนาที่แค่รันเว็บด้วย URL และ Publishable key ไม่จำเป็นต้องมีบัญชี Dashboard ทุกคน
+ห้ามส่ง `.env` หรือคีย์จริงผ่าน Git; `.env.example` เป็นตัวอย่างเท่านั้น
 
-- Node.js และ npm
-- MongoDB หรือ Docker Desktop
-- Flutter SDK สำหรับรัน mobile app
-- Google Maps API key
-- Browser สำหรับ Admin Web
+## 2. เตรียมเครื่องและ dependencies
 
-## 4. ขั้นตอนรันระบบแบบ Manual
+ใช้ Node.js รุ่นที่รองรับ built-in type stripping เช่น 22.6+ สำหรับคำสั่งทดสอบ TypeScript ในคู่มือนี้, npm และ MongoDB ที่เปิดใช้งานแล้ว
+Python/YOLO จำเป็นเฉพาะเมื่อต้องใช้งาน detector จริง
 
-### 4.1 รัน MongoDB
-
-เปิด MongoDB local หรือใช้ Docker ตาม `docs/DOCKER.md`
-
-### 4.2 รัน Backend
+รันจากโฟลเดอร์หลักของ repository:
 
 ```bash
-cd backend-node
-npm install
-node app.js
+npm ci --prefix backend-node
+npm ci --prefix admin-web
+npm ci --prefix frontend-vue
 ```
 
-### 4.3 Seed ข้อมูลตัวอย่าง
+ไม่ต้องรัน `npm install` ที่โฟลเดอร์หลักเพื่อเปิดเว็บ แต่ละส่วนมี `package.json` ของตัวเอง
+
+## 3. เตรียมไฟล์ตั้งค่า
+
+ทำเฉพาะไฟล์ที่ยังไม่มีอยู่ ห้ามคัดลอกทับ `.env` ที่กรอกค่าแล้ว
+คำสั่งนี้ใช้กับ macOS/Linux; บน Windows คัดลอกไฟล์ผ่าน VS Code ได้:
 
 ```bash
-cd backend-node
-node seed/seed_station.js
-node seed/seed_bus.js
-```
-
-### 4.4 รัน Admin Web
-
-```bash
-cd admin-web
-npm install
 cp .env.example .env
-npm run dev
+cp backend-node/.env.gps.example backend-node/.env.gps
+cp admin-web/.env.example admin-web/.env
+cp frontend-vue/.env.example frontend-vue/.env
 ```
 
-### 4.5 รัน Flutter App
+| ไฟล์ | ค่าที่เพื่อนต้องกรอก | โปรแกรมที่อ่าน |
+|---|---|---|
+| `.env` ที่ root | `MONGO_URI` ถ้าไม่ได้ใช้ local, `DB_NAME`, `SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | `backend-node/app.js` |
+| `backend-node/.env.gps` | บัญชี GPS หรือ `GPS_ENABLED=false` สำหรับทำ UI โดยไม่ดึง GPS | `backend-node/config.js` |
+| `admin-web/.env` | `VITE_API_BASE_URL`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Vite ฝั่งแอดมิน |
+| `frontend-vue/.env` | ตัวแปร `VITE_*` ชุดเดียวกับแอดมิน | Vite ฝั่งผู้โดยสาร |
+
+`SECRET_KEY` คือคีย์ JWT ของระบบเดิม ส่วน `SUPABASE_SECRET_KEY` คือคีย์หลังบ้านที่คัดลอกจาก Supabase API Keys เป็นคนละค่า
+ใช้ URL/keys จาก Supabase โปรเจกต์เดียวกันทุกส่วน อย่าใส่ Secret key ในตัวแปร `VITE_*`
+เมื่อรัน local ค่า `VITE_*` ใน root `.env` ไม่ได้ถูกโหลดเข้าเว็บสองโฟลเดอร์โดยอัตโนมัติ
+
+หากทีมตั้ง Supabase แล้ว ไม่ต้องสร้างโปรเจกต์ใหม่ ทำตาม [คู่มือ Realtime](REALTIME.md) เพื่อยืนยันสิทธิ์และการเชื่อมต่อ
+หากใช้ backend กลางร่วมกัน ให้ชี้ `VITE_API_BASE_URL` ไปที่ backend นั้น และไม่ต้องเปิด Node/GPS worker ซ้ำบนเครื่องตนเอง
+
+## 4. เปิดระบบ local
+
+เปิด MongoDB ก่อน จากนั้นใช้ Terminal แยกสามแท็บ ทุกคำสั่งเริ่มจาก root repository:
+
+Backend:
 
 ```bash
-cd frontend-vue
-flutter pub get
-flutter run
+node backend-node/app.js
 ```
 
-## 5. ขั้นตอนรันระบบแบบ Docker
-
-จาก root project
+Admin Web:
 
 ```bash
-docker compose up -d --build
+npm --prefix admin-web run dev -- --port 5173 --strictPort
 ```
 
-เปิดใช้งาน
-
-- Backend API: `http://localhost:5001`
-- Admin Web: `http://localhost:8080`
-- MongoDB: `localhost:27017`
-
-## 6. บัญชีทดสอบ
-
-ถ้ารันด้วย Docker และใช้ backup ตัวอย่าง
-
-```text
-username: admin
-password: 12345678
-```
-
-ถ้ารันแบบ manual ให้ตรวจสอบข้อมูล admin ใน MongoDB หรือสร้าง user admin ตามข้อมูลจริงของผู้ส่งมอบ
-
-## 7. Checklist ทดสอบก่อนส่ง
-
-### Backend
-
-- API เปิดได้
-- MongoDB เชื่อมต่อได้
-- Seed station และ bus สำเร็จ
-- `/health` ใช้งานได้ถ้าเปิดผ่าน Docker
-
-### Admin Web
-
-- Login admin ได้
-- Dashboard แสดงข้อมูล
-- Dashboard แสดง live station map, crowd alerts และ dispatch guide
-- Station Setting เพิ่ม แก้ ลบสถานีได้
-- Buses แสดงข้อมูลรถได้
-- Reports แสดง active report, feedback และ history ได้
-- Feedback ไม่ต้องมีสถานะ pending และ History report แสดงเป็น resolved เท่านั้น
-- เปลี่ยนสถานะ report ได้
-- เปลี่ยนภาษา EN/TH แล้วข้อความเปลี่ยนถูกต้อง
-
-### Flutter App
-
-- เปิดแอปได้
-- แผนที่แสดงผล
-- ปุ่มภาษาเปลี่ยน EN/TH ได้
-- เลือก From/To station ได้
-- เส้นทางไม่ย้อนศรในกรณีสถานี outbound
-- ไม่สามารถเลือกสถานีต้นทางและปลายทางซ้ำกันได้
-- เพิ่ม Favorite station ได้
-- ส่ง report ได้
-- ส่ง feedback ได้
-
-### Documentation
-
-- `docs/projectmap.md` อธิบาย directory/file map ครบ
-- `docs/prd.md` อธิบาย requirement และ acceptance criteria
-- `docs/agent.md` อธิบาย architecture และ workflow สำหรับ AI/agent
-- `docs/er.md` อธิบาย logical ER ของ collections หลัก
-- `docs/data.md` อธิบาย schema, index, seed และ backup data
-- `README.md`, `HANDBOOK.md`, `HANDOVER.md`, `DOCKER.md` link ไปยังเอกสารสำคัญครบ
-
-## 8. Known Issues / ข้อจำกัด
-
-- ถ้าไม่มี translation API ระบบจะไม่แปลข้อความ report ที่ผู้ใช้พิมพ์เองแบบอัตโนมัติ
-- ถ้า Google Maps API key ไม่ถูกต้อง แผนที่จะไม่แสดง
-- ถ้าใช้มือถือจริงต้องเปลี่ยน API URL จาก `localhost` เป็น IP ของเครื่อง backend
-- Detector/CCTV ต้องตั้งค่า camera URL ให้ตรงกับสภาพแวดล้อมจริง
-- ไฟล์ build/cache เช่น `frontend-vue/build/` และ `frontend-vue/.dart_tool/` ไม่ควรรวมใน commit ส่งมอบ
-
-## 9. คำสั่งตรวจสอบก่อนส่ง
+Passenger Web:
 
 ```bash
-git status
+npm --prefix frontend-vue run dev -- --port 5174 --strictPort
 ```
 
-Admin Web
+ใช้ `--strictPort` เพื่อให้ทราบทันทีหากพอร์ตถูกใช้งาน ไม่ปล่อยให้ Vite เปลี่ยนพอร์ตเงียบ ๆ
+หากเปลี่ยน `.env` ให้กด Ctrl+C แล้วเริ่มโปรแกรมนั้นใหม่
+Backend ไม่มี `npm run dev` ใน package ปัจจุบัน ให้ใช้ `node backend-node/app.js`
+
+เช็ก API:
 
 ```bash
-cd admin-web
-npm run build
+curl http://localhost:5101/health
+curl http://localhost:5101/api/buses/snapshot
 ```
 
-Flutter
+`/health` ควรตอบ `{"status":"ok"}` ส่วน snapshot ต้องมี `streamId`, `sequence`, `capturedAt`, `buses`
+health สำเร็จไม่ได้ยืนยันว่า GPS, กล้อง หรือ Supabase ใช้งานได้ทั้งหมด
+
+## 5. ข้อมูลและบัญชีสำหรับเครื่องใหม่
+
+ถ้าใช้ฐานข้อมูลร่วมกับทีม ให้ใช้ข้อมูลเดิม ไม่รัน seed ทับ
+หากเป็นฐานข้อมูล local ใหม่ ให้ขอ backup ที่ตัดข้อมูลส่วนตัวแล้ว หรือเตรียมสถานี/บัญชีเฉพาะชุดทดสอบ
+`seed_station.js` ลบสถานีเดิมทั้งหมดก่อนใส่ใหม่; `seed_bus.js` เป็นข้อมูลจำลองเก่า ไม่ใช่ข้อมูล GPS ที่ API ปัจจุบันใช้
+
+ถ้าจำเป็นต้องสร้างบัญชี admin บนฐานทดสอบใหม่ ให้กำหนด `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` ใน root `.env` ชั่วคราว แล้วรัน:
 
 ```bash
-cd frontend-vue
-flutter analyze
+node --env-file=.env backend-node/seed/seed_admin.js
 ```
 
-Backend
+คำสั่งนี้ใช้ Node โหลด root `.env` ให้ seed เพราะ seed ไม่ได้ผ่าน `app.js` และจะอัปเดตบัญชีเดิมหากใช้ชื่อซ้ำ
+ลบค่ารหัสผ่าน seed ออกจากไฟล์หลังใช้งาน ไม่ใช้รหัสผ่าน demo กับระบบจริง
 
-```bash
-cd backend-node
-node --check app.js
-```
+## 6. ทดสอบก่อนส่งต่อ
 
-## 10. สรุปสำหรับผู้รับระบบ
+- [ ] เว็บผู้โดยสารเปิดได้โดยไม่ต้องล็อกอิน และภาษาเปลี่ยนผ่าน TH | EN
+- [ ] แอดมินล็อกอินและดู Dashboard/Buses ได้
+- [ ] แผนที่โหลดได้ด้วย Google Maps key ของสภาพแวดล้อมนั้น
+- [ ] GPS มีข้อมูลใหม่; ETA ไม่ใช้ข้อมูลที่เก่าเกินเกณฑ์
+- [ ] เห็น WebSocket event `buses.updated` ในทั้งสองเว็บ
+- [ ] `/api/buses/snapshot` ไม่ยิงทุก 5 วินาทีตลอดเวลาที่มี event ใหม่
+- [ ] ตัด/ต่ออินเทอร์เน็ตแล้วข้อมูลกลับมาได้
+- [ ] ไม่มี Secret key ใน frontend หรือไฟล์ตัวอย่าง
+- [ ] Build/tests ใน [REALTIME.md](REALTIME.md#คำสั่งตรวจสอบโค้ด) ผ่าน
 
-ระบบนี้ประกอบด้วย Backend API, Admin Web และ Flutter App ผู้รับระบบควรเริ่มจากอ่าน `README.md` และ `docs/projectmap.md` เพื่อเข้าใจโครงสร้าง อ่าน `docs/prd.md`, `docs/er.md`, `docs/data.md` เพื่อเข้าใจ requirement/database อ่าน `docs/HANDBOOK.md` เพื่อใช้งานระบบ และอ่าน `docs/DOCKER.md` ถ้าต้องการรันด้วย Docker
+ณ วันที่อัปเดตเอกสาร: ทดสอบ build สองเว็บ, tests รวม 53 รายการ, รถจริง 16 คัน,
+รับข้อความช่องส่วนตัว, ปฏิเสธการส่งด้วย Publishable key และการตัด/ต่ออินเทอร์เน็ตใน Chrome ผ่านแล้ว
+ผลนี้เป็นหลักฐานของเครื่องที่ทดสอบ ไม่ใช่การรับรองว่าค่า env ของเครื่องใหม่ถูกต้อง
+
+## 7. พัฒนาต่อที่ไหน
+
+ดู [projectmap.md](projectmap.md) สำหรับรายการไฟล์ และ [REALTIME.md](REALTIME.md) สำหรับ protocol, สิทธิ์, fallback และ troubleshooting
+ข้อมูลสถานี เส้นทาง รายงาน และ detector ยังใช้ API ตามเดิม; งาน Realtime รอบนี้ครอบคลุมตำแหน่ง/สถานะ GPS ของรถ
+อย่าเพิ่มข้อมูลกล้อง ผู้ใช้ หรือรายงานส่วนตัวลงช่องรถที่ผู้โดยสารอ่านได้
+
+สำหรับ Docker ใช้ [DOCKER.md](DOCKER.md) และสำหรับวิธีใช้หน้าเว็บใช้ [HANDBOOK.md](HANDBOOK.md)

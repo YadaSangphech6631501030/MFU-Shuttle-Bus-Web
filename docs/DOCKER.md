@@ -1,311 +1,94 @@
-# Docker Guide for MFU Shuttle Bus
+# รัน MFU Shuttle Bus Web ด้วย Docker
 
-เอกสารนี้ใช้สำหรับ build image และรันโปรเจ็คด้วย Docker
+อัปเดตตาม `docker-compose.yml` วันที่ 16 กันยายน 2026 ทั้ง Admin และ Passenger เป็น Vue/Vite
 
-## สิ่งที่ Docker จะรัน
+## เตรียมก่อนรัน
 
-- `mongo` - MongoDB database
-- `backend` - Node.js/Express API ที่ port `5001`
-- `admin-web` - Vue/Vite admin web ที่เสิร์ฟด้วย Nginx ที่ port `8080`
-- `flutter-web` - Flutter web version ที่ port `8081` แบบ optional profile
+1. ติดตั้งและเปิด Docker Desktop หรือ Docker Engine พร้อม Compose
+2. คัดลอก root `.env.example` เป็น `.env` และ `backend-node/.env.gps.example` เป็น `backend-node/.env.gps` เฉพาะไฟล์ที่ยังไม่มี
+3. กรอกค่าของทีมตาม [HANDOVER.md](HANDOVER.md) และตั้งสิทธิ์ Supabase ตาม [REALTIME.md](REALTIME.md)
+4. ถ้าทำเฉพาะเว็บ ตั้ง `INSTALL_DETECTOR=false` ใน root `.env` เพื่อลด dependency Python/YOLO ตอน build
 
-หมายเหตุ: โฟลเดอร์ `frontend-vue` เป็น Flutter app ไม่ใช่ Vue app ตามชื่อโฟลเดอร์ ถ้าจะทำ Android/iOS ยังต้องใช้ Flutter SDK build ตามปกติ ส่วน Dockerfile ที่เพิ่มให้ใช้ build เป็น Flutter Web
+ต้องมี `.env.gps` แม้จะตั้ง `GPS_ENABLED=false` เพราะ Compose mount ไฟล์นี้แบบ read-only
+อย่าเปิด local MongoDB/Node ค้างบนพอร์ตเดียวกับ Compose
 
-## ไฟล์ที่เพิ่ม/แก้สำหรับ Docker
+## รันและหยุด
 
-- `docker-compose.yml`
-- `docker/mongo-init/001-import-backup.sh`
-- `docker/mongo-init/backup/*.json`
-- `.env.example`
-- `backend-node/Dockerfile`
-- `backend-node/.dockerignore`
-- `backend-node/python/requirements.txt`
-- `admin-web/Dockerfile`
-- `admin-web/.dockerignore`
-- `admin-web/nginx.conf`
-- `frontend-vue/Dockerfile`
-- `frontend-vue/.dockerignore`
-- `frontend-vue/nginx.conf`
+จาก root repository:
 
-มีการแก้ backend ให้รับค่าจาก environment ด้วย เช่น `MONGO_URI`, `DB_NAME`, `SECRET_KEY`, `PORT`, `CAMERA_URL`, `SAVE_INTERVAL`, `INSTALL_DETECTOR`
-
-## เตรียมเครื่อง
-
-ต้องติดตั้ง Docker Desktop และเปิด Docker Desktop ก่อนรันคำสั่ง
-
-ตรวจสอบว่า Docker ใช้ได้:
-
-```powershell
-docker --version
-docker compose version
-```
-
-## วิธีรันทั้งระบบแบบเร็ว
-
-จาก root project:
-
-```powershell
+```bash
 docker compose up -d --build
-```
-
-ถ้าเป็นเครื่องใหม่หรือ MongoDB volume ยังว่างอยู่ Docker จะ import backup จาก `docker/mongo-init/backup` เข้า database ให้อัตโนมัติ โดยมี collections:
-
-- `buses`
-- `reports`
-- `stations`
-- `users`
-
-ระบบจะสร้าง admin สำรองให้ด้วย:
-
-```text
-username: admin
-password: 12345678
-```
-
-หลังรันเสร็จ เปิดใช้งานได้ที่:
-
-- Backend API: `http://localhost:5001`
-- Backend healthcheck: `http://localhost:5001/health`
-- Admin Web: `http://localhost:8080`
-- MongoDB: `localhost:27017`
-
-เช็คสถานะ container:
-
-```powershell
 docker compose ps
 ```
 
-ดู log:
+| Service | URL/พอร์ตบนเครื่อง |
+|---|---|
+| backend | http://localhost:5101 |
+| health | http://localhost:5101/health |
+| admin-web | http://localhost:8180 |
+| user-web | http://localhost:8181 |
+| mongo | localhost:27017 |
 
-```powershell
+ทั้งสองเว็บรันเป็น service ปกติ ไม่มี profile Flutter
+
+```bash
 docker compose logs -f backend
-docker compose logs -f admin-web
-docker compose logs -f mongo
-```
-
-หยุดระบบ:
-
-```powershell
+docker compose logs -f admin-web user-web
 docker compose down
 ```
 
-ถ้าต้องการลบ database volume ด้วย ใช้คำสั่งนี้อย่างระวัง เพราะข้อมูล MongoDB จะหาย:
+`down` ปกติเก็บ named volumes ไว้ ไม่ต้องเติม `-v` สำหรับการหยุดหรืออัปเดตโค้ด เพราะ `-v` ลบข้อมูลใน volumes
 
-```powershell
-docker compose down -v
+## Environment
+
+Compose อ่าน root `.env` ไม่ได้อ่าน `.env` ในแต่ละเว็บเป็นแหล่ง build args
+
+| ตัวแปร | ผู้ใช้ค่า |
+|---|---|
+| `DB_NAME` | MongoDB/Node ค่าเริ่มต้น `shuttlebus_web_system` |
+| `SECRET_KEY`, `CAMERA_URL`, `SAVE_INTERVAL` | Node runtime |
+| `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Node runtime เท่านั้น |
+| `VITE_API_BASE_URL` | build เว็บแอดมิน |
+| `USER_WEB_API_BASE_URL` | build เว็บผู้โดยสาร |
+| `VITE_GOOGLE_MAPS_API_KEY` | build ทั้งสองเว็บ |
+| `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | build ทั้งสองเว็บ |
+| `INSTALL_DETECTOR` | build Python/YOLO และกำหนด detector enabled |
+
+Node ใน Compose ใช้ `mongodb://mongo:27017/` ตาม `docker-compose.yml` ถ้าจะใช้ฐานข้อมูลภายนอกต้องปรับ environment ของ service นั้น
+API URL ของเว็บถูกใช้โดยเบราว์เซอร์ จึงห้ามใส่ `http://backend:5101` ซึ่งเป็นชื่อภายใน Docker
+ถ้าเปิดจากมือถือ/เครื่องเพื่อน ให้ใช้ IP หรือโดเมนที่เบราว์เซอร์เข้าถึงได้แทน `localhost`
+
+หลังเปลี่ยนค่าฝั่งหน้าเว็บ ต้อง rebuild:
+
+```bash
+docker compose up -d --build admin-web user-web
 ```
 
-## ตั้งค่า environment
+หลังเปลี่ยนค่าฝั่ง Node ใน root `.env` ให้ recreate service เพื่อรับ environment ใหม่:
 
-สามารถ copy ไฟล์ตัวอย่าง:
-
-```powershell
-Copy-Item .env.example .env
+```bash
+docker compose up -d --force-recreate backend
 ```
 
-ค่าที่สำคัญ:
+หากแก้ source backend หรือ dependency ให้ใช้ `docker compose up -d --build backend`
 
-```env
-DB_NAME=shuttlebus_system
-SECRET_KEY=change_this_secret_before_real_deploy
-CAMERA_URL=http://192.168.110.234:4747/video
-SAVE_INTERVAL=5
-VITE_API_BASE_URL=http://localhost:5001
-VITE_GOOGLE_MAPS_API_KEY=
-FLUTTER_API_BASE_URL=http://localhost:5001
+## ฐานข้อมูลเริ่มต้น
+
+เมื่อสร้าง MongoDB volume ใหม่ครั้งแรก จะรัน `docker/mongo-init/001-import-backup.sh`
+นำเข้าข้อมูล demo จาก `docker/mongo-init/backup/` และสร้างบัญชี admin demo ตามสคริปต์
+volume เดิมไม่ถูก import ซ้ำด้วยการ `up` ปกติ
+
+อย่ารันสคริปต์ import ซ้ำกับฐานที่ใช้งานอยู่ เพราะมี `--drop` และเขียนทับบัญชี demo
+ตรวจ/เปลี่ยนบัญชี demo ก่อนใช้งานจริง และสำรองข้อมูลก่อนงานย้ายฐาน
+GPS จริงใช้ fleet registry กับข้อมูล `source: ppgps` ไม่ใช้รถจำลองจาก backup เป็นแหล่งตำแหน่งสด
+
+## ตรวจหลังรัน
+
+```bash
+curl http://localhost:5101/health
+curl http://localhost:5101/api/buses/snapshot
+docker compose exec backend node scripts/check-realtime.js
 ```
 
-ถ้าแก้ `VITE_API_BASE_URL` หรือ `VITE_GOOGLE_MAPS_API_KEY` ต้อง build `admin-web` ใหม่ เพราะ Vite ฝังค่านี้ตอน build:
-
-```powershell
-docker compose build admin-web
-docker compose up -d admin-web
-```
-
-## Seed ข้อมูลเริ่มต้น
-
-โปรเจกต์มี backup JSON สำหรับ import อัตโนมัติอยู่ที่:
-
-```text
-docker/mongo-init/backup/
-```
-
-MongoDB official image จะรันไฟล์ใน `docker/mongo-init/001-import-backup.sh` เฉพาะตอนสร้าง database volume ใหม่ครั้งแรกเท่านั้น ถ้าเครื่องมี `mongo-data` volume อยู่แล้ว การรัน `docker compose up` จะไม่ import ซ้ำ เพื่อไม่ให้ข้อมูลเดิมถูกเขียนทับ
-
-ถ้าต้องการ re-import backup เข้า database เดิม ให้ระวังว่าคำสั่งนี้จะ `drop` collections ที่ import แล้วใส่ข้อมูลจาก backup ใหม่:
-
-```powershell
-docker compose exec mongo /docker-entrypoint-initdb.d/001-import-backup.sh
-```
-
-ถ้าต้องการเริ่ม database ใหม่ทั้งหมด ใช้คำสั่งนี้อย่างระวัง เพราะข้อมูล MongoDB เดิมจะหาย:
-
-```powershell
-docker compose down -v
-docker compose up -d --build
-```
-
-หลัง container รันแล้ว สามารถ seed station และ bus ได้:
-
-```powershell
-docker compose exec backend node seed/seed_station.js
-docker compose exec backend node seed/seed_bus.js
-```
-
-## Build image แยกทีละตัว
-
-Backend:
-
-```powershell
-docker build -t mfu-shuttle-bus-backend:latest ./backend-node
-```
-
-Backend พร้อม detector/YOLO:
-
-```powershell
-docker build `
-  -t mfu-shuttle-bus-backend:detector `
-  --build-arg INSTALL_DETECTOR=true `
-  ./backend-node
-```
-
-Admin Web:
-
-```powershell
-docker build `
-  -t mfu-shuttle-bus-admin-web:latest `
-  --build-arg VITE_API_BASE_URL=http://localhost:5001 `
-  --build-arg VITE_GOOGLE_MAPS_API_KEY= `
-  ./admin-web
-```
-
-Flutter Web:
-
-```powershell
-docker build `
-  -t mfu-shuttle-bus-flutter-web:latest `
-  --build-arg API_BASE_URL=http://localhost:5001 `
-  ./frontend-vue
-```
-
-## รัน Flutter Web ด้วย Docker Compose
-
-Flutter web ถูกแยกไว้เป็น profile เพราะ image ใหญ่และ build นาน:
-
-```powershell
-docker compose --profile flutter-web up -d --build
-```
-
-เปิดที่:
-
-```text
-http://localhost:8081
-```
-
-## Build แล้วดู image
-
-```powershell
-docker images
-```
-
-ควรเห็น image เช่น:
-
-```text
-mfu-shuttle-bus-backend
-mfu-shuttle-bus-admin-web
-mfu-shuttle-bus-flutter-web
-```
-
-## ทดสอบ API หลังรัน
-
-PowerShell:
-
-```powershell
-Invoke-RestMethod http://localhost:5001/health
-```
-
-ผลลัพธ์ที่ควรได้:
-
-```json
-{
-  "status": "ok"
-}
-```
-
-## Troubleshooting: Docker Desktop containerd panic/SIGBUS
-
-ถ้า Docker Desktop ขึ้น error แนวนี้:
-
-```text
-service containerd failed: panic detected in containerd
-SIGBUS: bus error
-```
-
-ให้ลองตามลำดับนี้:
-
-```powershell
-wsl --shutdown
-```
-
-จากนั้นเปิด Docker Desktop ใหม่ แล้วเช็ค:
-
-```powershell
-docker version
-docker compose config
-```
-
-ถ้า Docker กลับมาแล้ว แต่เคย crash ระหว่าง build image ใหญ่ ให้ล้าง build cache ที่ค้างได้:
-
-```powershell
-docker builder prune
-```
-
-แล้ว build ใหม่โดยใช้ค่า default ที่เบากว่า:
-
-```powershell
-docker compose build backend admin-web
-docker compose up -d
-```
-
-ถ้ายัง crash อยู่ ให้เปิด Docker Desktop แล้วใช้เมนู `Troubleshoot` > `Restart Docker Desktop`
-
-ตัวเลือก `Reset to factory defaults` เป็นทางสุดท้าย เพราะจะลบ images, containers และ volumes ของ Docker Desktop
-
-## หมายเหตุเรื่อง localhost
-
-ใน browser ของเครื่องเรา ใช้ `http://localhost:5001` ได้ เพราะ browser อยู่บนเครื่อง host
-
-แต่ใน container backend จะต่อ MongoDB ด้วยชื่อ service คือ:
-
-```text
-mongodb://mongo:27017/
-```
-
-จุดนี้ถูกตั้งไว้ใน `docker-compose.yml` แล้ว
-
-## หมายเหตุเรื่อง detector
-
-ค่าเริ่มต้น `INSTALL_DETECTOR=true` เพื่อให้ backend image build พร้อม CCTV/YOLO detector ทันที
-
-ให้ตั้งค่าใน `.env`:
-
-```env
-INSTALL_DETECTOR=true
-```
-
-แล้ว build backend ใหม่:
-
-```powershell
-docker compose build backend
-docker compose up -d backend
-```
-
-เมื่อเปิด `INSTALL_DETECTOR=true` backend Docker image จะติดตั้ง Python package สำหรับ detector:
-
-- CPU-only `torch` และ `torchvision`
-- `ultralytics`
-- `opencv-python-headless`
-- `numpy`
-- `pymongo`
-
-Dockerfile ติดตั้ง PyTorch แบบ CPU-only ก่อน เพื่อลดโอกาสที่ pip จะดึง CUDA dependency ขนาดใหญ่มาโดยไม่จำเป็น แต่การ build backend image ยังอาจใช้เวลานานและใช้พื้นที่เยอะกว่างาน Node.js ปกติ เพราะต้องติดตั้ง dependency ของ YOLO
+จากนั้นดู WebSocket ในเบราว์เซอร์ตาม [REALTIME.md](REALTIME.md)
+ถ้า Supabase ไม่พร้อม เว็บยังใช้ API fallback; หาก Maps ไม่ขึ้นต้องตรวจ Google Maps key/referrer แยกกัน

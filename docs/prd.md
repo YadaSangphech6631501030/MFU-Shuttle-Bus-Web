@@ -19,9 +19,10 @@ MFU Shuttle Bus เป็นระบบติดตามและจัดก�
 
 ### In Scope
 
-- Flutter app สำหรับผู้ใช้ทั่วไป
+- Vue passenger web สำหรับผู้ใช้ทั่วไป
 - Admin Web สำหรับผู้ดูแลระบบ
 - Backend REST API
+- Supabase Realtime Broadcast สำหรับข้อมูลรถ พร้อม HTTP snapshot/fallback
 - MongoDB database
 - Docker Compose สำหรับ build/run ระบบ
 - Seed/backup data สำหรับ demo
@@ -31,11 +32,11 @@ MFU Shuttle Bus เป็นระบบติดตามและจัดก�
 ### Out Of Scope / Current Limitations
 
 - ระบบยังไม่มี payment หรือ booking seat
-- Flutter passenger app ไม่ใช้ login/register ใน workflow ปัจจุบัน และเริ่มที่หน้า `Homepages`
+- Vue passenger web ไม่ใช้ login/register ใน workflow ปัจจุบัน และเริ่มที่หน้าแผนที่ใน `App.vue`
 - Report จากผู้ใช้ทั่วไปถูกบันทึกเป็น `reporterType: guest`
-- รถในระบบ demo มี movement engine จำลองสถานะทุก 5 วินาที
+- รถใช้ GPS worker และ Supabase Broadcast; ETA ต้องมี GPS ที่สดและข้อมูลการเคลื่อนที่เพียงพอ
 - Detector ต้องมี camera URL จริงและ dependency Python/YOLO พร้อมใช้งาน
-- Flutter folder ชื่อ `frontend-vue/` แต่เป็น Flutter app ไม่ใช่ Vue app
+- `frontend-vue/` ใช้ Vue 3/Vite สำหรับเว็บผู้โดยสาร
 
 ## 4. Functional Requirements
 
@@ -44,28 +45,37 @@ MFU Shuttle Bus เป็นระบบติดตามและจัดก�
 | FR-01 | Admin login และรับ JWT token ได้ | `backend-node/routes/auth.js`, `admin-web/src/services/api.ts` |
 | FR-02 | Admin-only endpoints ต้องตรวจ JWT และ `role: admin` | `backend-node/middleware/jwt.js`, `backend-node/middleware/admin.js` |
 | FR-03 | Admin จัดการบัญชี admin/user ได้ | `backend-node/routes/auth.js`, `admin-web/src/page/Users.vue` |
-| FR-04 | Flutter passenger app เข้าใช้งานแบบ guest โดยไม่ต้อง login/register | `frontend-vue/lib/main.dart`, `frontend-vue/lib/user/homepages.dart` |
-| FR-05 | แอปแสดงสถานีตามสาย `line1`, `line2` ได้ | `backend-node/routes/station.js`, `frontend-vue/lib/user/homepages.dart` |
-| FR-06 | แอปเลือก From/To station และแสดงเส้นทางบน Google Map ได้ | `frontend-vue/lib/user/homepages.dart` |
-| FR-07 | แอปป้องกันการเลือกต้นทางและปลายทางซ้ำกัน | `frontend-vue/lib/user/homepages.dart` |
-| FR-08 | แอปจำกัดปลายทางบางจุดตามทิศทางรถเพื่อลดเส้นทางย้อนศร | `frontend-vue/lib/user/homepages.dart` |
-| FR-09 | แอปบันทึก favorite station ด้วย local storage/shared preferences ได้ | `frontend-vue/lib/user/favorite_station.dart`, `frontend-vue/lib/user/homepages.dart` |
-| FR-10 | แอปส่ง report และ feedback ได้ | `frontend-vue/lib/user/report_page.dart`, `backend-node/routes/report.routes.js` |
+| FR-04 | Vue passenger web เข้าใช้งานแบบ guest โดยไม่ต้อง login/register | `frontend-vue/src/main.ts`, `frontend-vue/src/App.vue` |
+| FR-05 | แอปแสดงสถานีตามสาย `line1`, `line2` ได้ | `backend-node/routes/station.js`, `frontend-vue/src/App.vue` |
+| FR-06 | แอปเลือก From/To station และแสดงเส้นทางบน Google Map ได้ | `frontend-vue/src/App.vue` |
+| FR-07 | แอปป้องกันการเลือกต้นทางและปลายทางซ้ำกัน | `frontend-vue/src/App.vue` |
+| FR-08 | แอปจำกัดปลายทางบางจุดตามทิศทางรถเพื่อลดเส้นทางย้อนศร | `frontend-vue/src/App.vue` |
+| FR-09 | แอปบันทึก favorite station ด้วย localStorage ได้ | `frontend-vue/src/pages/FavoritesPage.vue`, `frontend-vue/src/App.vue` |
+| FR-10 | แอปส่ง report และ feedback ได้ | `frontend-vue/src/pages/FeedbackPage.vue`, `backend-node/routes/report.routes.js` |
 | FR-11 | Admin จัดการสถานี เพิ่ม แก้ ลบ และดูทั้งหมดได้ | `backend-node/routes/station.js`, `admin-web/src/page/Stations.vue` |
 | FR-12 | Admin ดู dashboard, crowd alerts และ dispatch guide ได้ | `admin-web/src/page/Dashboard.vue` |
 | FR-13 | Admin ดูสถานะรถได้ | `backend-node/routes/bus.routes.js`, `admin-web/src/page/Buses.vue` |
 | FR-14 | Admin ดู report, feedback, history และเปลี่ยนสถานะ report ได้ | `backend-node/routes/report.routes.js`, `admin-web/src/page/Reports.vue` |
 | FR-15 | Auth module รองรับการจัดการบัญชีสำหรับ Admin Web | `backend-node/routes/auth.js`, `admin-web/src/page/Users.vue` |
 | FR-16 | Admin start/stop detector และดู frame/stream ต่อสถานีได้ | `backend-node/routes/detector.routes.js`, `admin-web/src/page/StationCCTV.vue` |
-| FR-17 | ระบบรองรับภาษาอังกฤษ/ไทยใน user app และ admin web | `frontend-vue/lib/services/language_service.dart`, admin pages |
+| FR-17 | ระบบรองรับภาษาอังกฤษ/ไทยใน user app และ admin web | `frontend-vue/src/App.vue`, admin pages |
 | FR-18 | ระบบรันด้วย Docker Compose ได้ | `docker-compose.yml`, `docs/DOCKER.md` |
+
+### Acceptance criteria สำหรับ Realtime รถ
+
+- ทั้งสองเว็บรับ `buses.updated` และอัปเดตข้อมูลรถได้โดยไม่ GET ซ้ำทุก event
+- หลัง reconnect ใช้ snapshot เติมข้อมูล และ response ที่ช้าไม่เขียนทับ sequence ใหม่กว่า
+- เมื่อ Realtime ไม่มีข้อมูล/หลุด ใช้ HTTP fallback โดยยังตรวจอายุ GPS สำหรับ ETA
+- Publishable key รับข้อมูลรถได้แต่ส่งเข้าช่องรถไม่ได้; Secret key อยู่หลังบ้าน
+- จำนวนคนรอ รายงาน และ detector ยังใช้ API เดิมตามขอบเขตรอบนี้
+- รายละเอียดการตรวจรับอยู่ใน [REALTIME.md](REALTIME.md)
 
 ## 5. Non-Functional Requirements
 
 | ID | Requirement | รายละเอียด |
 |---|---|---|
 | NFR-01 | Buildability | ต้อง build backend/admin web/docker ได้ตามคู่มือ |
-| NFR-02 | Portability | Docker Compose ต้องรัน MongoDB, Backend, Admin Web และ optional Flutter Web |
+| NFR-02 | Portability | Docker Compose ต้องรัน MongoDB, Backend, Admin Web และ Passenger Vue Web |
 | NFR-03 | Security | Admin endpoints ต้องใช้ JWT และ `role: admin` |
 | NFR-04 | Data privacy | ห้าม commit secret/API key จริง และไม่ควรเผยแพร่ camera credential จริง |
 | NFR-05 | Maintainability | ต้องมีเอกสาร project map, PRD, agent, ER, data dictionary |
@@ -76,7 +86,7 @@ MFU Shuttle Bus เป็นระบบติดตามและจัดก�
 
 ### 6.1 Passenger Route Search
 
-1. เปิด Flutter app
+1. เปิด Vue passenger web
 2. ระบบเปิดหน้า Home โดยไม่ต้อง login
 3. เลือก `From station`
 4. เลือก `To station`
@@ -175,7 +185,7 @@ Collections หลัก:
 
 ระบบต้องรันได้ 2 แบบ:
 
-1. Manual setup ด้วย Node.js, MongoDB, Flutter SDK
+1. Manual setup ด้วย Node.js, MongoDB, เว็บ Vue/Vite
 2. Docker Compose จาก root project
 
 คำสั่ง Docker หลัก:
@@ -186,9 +196,9 @@ docker compose up -d --build
 
 หลังรัน:
 
-- Backend API: `http://localhost:5001`
-- Admin Web: `http://localhost:8080`
-- Optional Flutter Web: `http://localhost:8081`
+- Backend API: `http://localhost:5101`
+- Admin Web: `http://localhost:8180`
+- Passenger Vue Web: `http://localhost:8181`
 - MongoDB: `localhost:27017`
 
 ## 10. Exam Readiness Checklist

@@ -1,6 +1,8 @@
 # AI-WORKFLOW: MFU Shuttle Bus
 
-อัปเดตจาก source repo `MFU-Shuttle-Bus` ณ วันที่ 08/07/2026
+อัปเดต source paths สำหรับ MFU-Shuttle-Bus-Web ณ วันที่ 16/09/2026
+
+งาน Realtime ให้เริ่มจาก [REALTIME.md](REALTIME.md); ตัวรับ `busFeed.ts` มีในทั้งสองเว็บและต้องทดสอบทั้งคู่
 
 เอกสารนี้เป็น workflow สำหรับ AI/agents ที่ต้องช่วยอ่าน แก้ไข ทดสอบ หรืออัปเดตเอกสารในโปรเจกต์ MFU Shuttle Bus
 
@@ -36,16 +38,16 @@ Frontend API truth:
 
 | App | API wrapper |
 |---|---|
-| Flutter passenger app | `frontend-vue/lib/services/api_service.dart` |
+| Vue passenger web | `frontend-vue/src/services/api.ts` |
 | Admin Vue web | `admin-web/src/services/api.ts` |
 
 Important UI files:
 
 | Area | Files |
 |---|---|
-| Flutter home/map/route search | `frontend-vue/lib/user/homepages.dart` |
-| Flutter reports/feedback | `frontend-vue/lib/user/report_page.dart` |
-| Flutter station/favorite | `frontend-vue/lib/user/bus_station.dart`, `frontend-vue/lib/user/favorite_station.dart` |
+| Passenger home/map/route search | `frontend-vue/src/App.vue` |
+| Passenger reports/feedback | `frontend-vue/src/pages/FeedbackPage.vue` |
+| Passenger station/favorite | `frontend-vue/src/pages/TransitPage.vue`, `frontend-vue/src/pages/FavoritesPage.vue` |
 | Admin dashboard | `admin-web/src/page/Dashboard.vue` |
 | Admin station CRUD | `admin-web/src/page/Stations.vue` |
 | Admin CCTV/detector | `admin-web/src/page/StationCCTV.vue` |
@@ -71,12 +73,12 @@ Admin Web change:
 - target page under `admin-web/src/page/`
 - related CSS in `admin-web/src/styles.css` if layout changes
 
-Flutter app change:
+Vue passenger web change:
 
-- `frontend-vue/lib/services/api_service.dart` if API behavior changes
-- target page under `frontend-vue/lib/user/`
-- `frontend-vue/lib/services/language_service.dart` if text/language changes
-- `frontend-vue/lib/services/route_asset_service.dart` and route assets if map route behavior changes
+- `frontend-vue/src/services/api.ts` if API behavior changes
+- target page under `frontend-vue/src/pages/`
+- `frontend-vue/src/App.vue` if text/language changes
+- `frontend-vue/src/App.vue` and route assets if map route behavior changes
 
 Docs/process change:
 
@@ -93,7 +95,7 @@ Docs/process change:
 2. Prefer existing style and libraries already used in the repo.
 3. Do not edit generated folders such as `node_modules/`, `build/`, `.dart_tool/`, `runtime/`.
 4. Do not commit real API keys, camera credentials, `.env`, or local machine secrets.
-5. If changing API response fields, update both Admin Web and Flutter consumers if they use the endpoint.
+5. If changing API response fields, update both Admin Web and Vue consumers if they use the endpoint.
 6. If changing MongoDB fields, update `docs/data.md`, `docs/er.md`, seed files, backup JSON, and UI types when needed.
 7. If changing route search or map behavior, update `docs/prd.md` if acceptance criteria changes.
 
@@ -120,11 +122,11 @@ Then apply middleware on routes that require admin access.
 
 ## 7. Frontend Pattern
 
-### Flutter Passenger App
+### Vue Passenger Web
 
-- Source lives under `frontend-vue/lib/`
-- API calls go through `frontend-vue/lib/services/api_service.dart`
-- Language text should go through `LanguageService.text(...)` where existing code uses it
+- Source lives under `frontend-vue/src/`
+- API calls go through `frontend-vue/src/services/api.ts`
+- Language text follows the existing Vue translation objects/computed state in `App.vue` and page props
 - Map/route changes should preserve Google Maps behavior and route asset fallback
 
 ### Admin Web
@@ -152,11 +154,11 @@ cd admin-web
 npm run build
 ```
 
-Flutter analysis:
+Passenger build:
 
 ```bash
 cd frontend-vue
-flutter analyze
+npm run build
 ```
 
 Docker config/run:
@@ -232,7 +234,7 @@ A task is done only when:
 
 ## 12. Known Repo Notes
 
-- `frontend-vue/` is Flutter, not Vue.
+- `frontend-vue/` is Vue 3/Vite; use `src/` as the active source.
 - Admin Web is Vue 3/Vite under `admin-web/`.
 - Backend mounted routes use native MongoDB driver, not Mongoose.
 - `backend-node/controller/bus.controller.js` references a missing model and is not mounted by `app.js`; do not use it as route truth.

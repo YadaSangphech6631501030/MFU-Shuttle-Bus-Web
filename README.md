@@ -1,181 +1,106 @@
-# MFU Shuttle Bus
+# MFU Shuttle Bus Web
 
-ระบบ Shuttle Bus สำหรับมหาวิทยาลัย ประกอบด้วย Backend API, หน้า Admin Web และ User Web App ด้วย Vue 3
+ระบบรถรับส่งมหาวิทยาลัยแม่ฟ้าหลวง: เว็บผู้โดยสารและแอดมินด้วย Vue 3, หลังบ้าน Node.js/Express, MongoDB และ Supabase Realtime สำหรับข้อมูลรถ
 
-## Project Structure
+## เริ่มต้นสำหรับสมาชิกทีม
 
-- `backend-node/` - Backend API ด้วย Node.js, Express และ MongoDB
-- `admin-web/` - หน้าเว็บผู้ดูแลระบบด้วย Vue 3 และ Vite
-- `frontend-vue/` - User Web App ด้วย Vue 3 และ Vite โดยคง UX/UI แบบ mobile app เดิม
+อ่าน **[คู่มือรับช่วงพัฒนา](docs/HANDOVER.md)** ก่อน มีขั้นตอนเตรียมเครื่อง, `.env`, บัญชีทดสอบ และคำสั่งรันครบ
+ข้อมูลจริงและบัญชีของทีมต้องรับผ่านช่องทางส่วนตัว ไม่อยู่ใน repository
 
-## Main Features
+## โครงสร้างและความสามารถ
 
-- จัดการสถานี shuttle bus และข้อมูลกล้อง CCTV
-- Dashboard สำหรับดูภาพรวมระบบ แผนที่สถานี และ crowd alerts
-- หน้า Buses สำหรับดูและจัดการสถานะรถออนไลน์/ออฟไลน์/จำนวนรถทั้งหมด
-- แอปผู้ใช้สำหรับเลือก From/To station ดูเส้นทางรถ และบันทึกสถานีโปรด
-- ระบบส่ง feedback จาก User Web และหน้า Reports สำหรับผู้ดูแลระบบ
-- รองรับภาษาอังกฤษและภาษาไทยในแอปผู้ใช้และ Admin Web
+| ส่วน | โฟลเดอร์ | หน้าที่ |
+|---|---|---|
+| Backend | `backend-node/` | REST API, Node JWT, GPS worker, MongoDB, detector |
+| Passenger | `frontend-vue/` | Google Map, ตำแหน่งรถ, ETA, From/To, Favorites, feedback, TH/EN |
+| Admin | `admin-web/` | Dashboard, สถานี, สายรถ, GPS status, รายงาน, บัญชี และ CCTV |
+| Realtime | Node → Supabase → Vue | อัปเดตตำแหน่ง/สถานะรถ พร้อม API fallback |
 
-## Requirements
+MongoDB เป็นฐานข้อมูลหลัก Supabase ใช้ Broadcast โดยไม่ต้องย้ายข้อมูลไป Postgres หรือสร้าง Storage Bucket
+ข้อมูลสถานี เส้นทาง รายงาน และ detector ยังโหลดผ่าน API ตามเดิม
 
-- MongoDB
-- Node.js 20+ และ npm
-- Google Maps API key สำหรับหน้าแผนที่
-- Python 3 ถ้าต้องใช้ detector script ใน backend
+## รันแบบ local
 
-## Backend Setup
+ติดตั้ง Node.js/npm และเปิด MongoDB ก่อน คำสั่งทดสอบ TypeScript ต้องใช้ Node ที่รองรับ type stripping เช่น 22.6+
+Python/YOLO ใช้เฉพาะเมื่อต้องเปิด detector จริง
 
-Backend ใช้ค่าเริ่มต้นจาก `backend-node/config.js`
+จาก root repository ติดตั้ง dependencies:
 
 ```bash
-cd backend-node
-npm install
-node app.js
+npm ci --prefix backend-node
+npm ci --prefix admin-web
+npm ci --prefix frontend-vue
 ```
 
-สร้างบัญชี Admin สำหรับการใช้งานครั้งแรก:
+เตรียมไฟล์ `.env` ทั้งสามตำแหน่งและ `.env.gps` ตาม [HANDOVER.md](docs/HANDOVER.md#3-เตรียมไฟล์ตั้งค่า) ก่อนรัน
+อย่าคัดลอกไฟล์ตัวอย่างทับค่าที่กรอกไว้แล้ว
+
+เปิด Terminal แยกสามแท็บ โดยทุกคำสั่งเริ่มจาก root:
 
 ```bash
-cd backend-node
-npm run seed:admin
+node backend-node/app.js
 ```
-
-ค่าบัญชีเริ่มต้นคือ `admin` / `12345678` หากต้องการกำหนดบัญชีเอง ให้ตั้งค่าก่อนรันคำสั่ง:
 
 ```bash
-ADMIN_USERNAME=admin ADMIN_EMAIL=admin@example.com ADMIN_PASSWORD=เปลี่ยนรหัสผ่าน npm run seed:admin
+npm --prefix admin-web run dev -- --port 5173 --strictPort
 ```
-
-คำสั่งนี้จะสร้างหรืออัปเดตเฉพาะผู้ใช้ชื่อนั้น และไม่ลบผู้ใช้อื่น
-
-หลังรันแล้ว API จะอยู่ที่
-
-```text
-http://localhost:5101
-```
-
-ค่าหลักใน `backend-node/config.js`
-
-- `MONGO_URI` - MongoDB URI ค่าเริ่มต้นเมื่อรัน local คือ `mongodb://localhost:27017/` หรือ `mongodb://mongo:27017/` เมื่อรันผ่าน Docker Compose
-- `DB_NAME` - ชื่อ database ค่าเริ่มต้นของ repo นี้คือ `shuttlebus_web_system`
-- `SECRET_KEY` - secret สำหรับ JWT
-- `CAMERA_URL` - URL กล้องสำหรับ detector
-- `SAVE_INTERVAL` - รอบเวลาบันทึกข้อมูล detector
-
-## Admin Web Setup
 
 ```bash
-cd admin-web
-npm install
-cp .env.example .env
-npm run dev
+npm --prefix frontend-vue run dev -- --port 5174 --strictPort
 ```
 
-ค่า env ที่ใช้ใน `admin-web/.env`
+| ส่วน | Local | Docker |
+|---|---|---|
+| Backend | http://localhost:5101 | http://localhost:5101 |
+| Admin | http://localhost:5173 | http://localhost:8180 |
+| Passenger | http://localhost:5174 | http://localhost:8181 |
 
-```env
-VITE_API_BASE_URL=http://localhost:5101
-VITE_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
-```
+Backend ไม่มี `npm run dev`; ใช้ `node backend-node/app.js`
+หากใช้ `npm run dev` โดยไม่ระบุพอร์ต Vite อาจเลือกพอร์ตถัดไป ให้ดู URL ใน Terminal
 
-คำสั่งที่ใช้บ่อย
+## Supabase และ GPS
+
+1. ตั้งค่า GPS ที่ `backend-node/.env.gps` ตาม [GPS.md](docs/GPS.md)
+2. ใส่ `SUPABASE_URL`/`SUPABASE_SECRET_KEY` ใน root `.env` สำหรับ backend
+3. ใส่ `VITE_SUPABASE_URL`/`VITE_SUPABASE_PUBLISHABLE_KEY` ใน `.env` ของเว็บทั้งสอง
+4. รัน [SQL สิทธิ์ Realtime](backend-node/sql/realtime.sql) ใน Supabase SQL Editor ครั้งแรก
+5. รีสตาร์ตโปรแกรมที่เปลี่ยน env และตรวจตาม [REALTIME.md](docs/REALTIME.md)
+
+ต้องใช้ Secret key เฉพาะ backend; `.env.example` เก็บ placeholders เท่านั้น
+เว็บโหลด snapshot ครั้งแรกและหลัง reconnect จากนั้นรับ `buses.updated` ผ่านช่องส่วนตัว `mfu-buses`
+หากไม่มี event เกิน 15 วินาทีหรือเชื่อมต่อไม่ได้ จะโหลด API สำรองทุก 5 วินาที
+
+## Docker
+
+เตรียม root `.env` และ `backend-node/.env.gps` แล้วรัน:
 
 ```bash
-npm run dev
-npm run build
-npm run preview
+docker compose up -d --build
 ```
 
-## User Web App Setup
+อ่าน [DOCKER.md](docs/DOCKER.md) สำหรับ environment, rebuild และ volumes
+เลือกใช้ local หรือ Docker โดยไม่เปิด service ซ้อนพอร์ตเดียวกัน
 
-โฟลเดอร์ `frontend-vue/` เป็น Vue 3 + Vite สำหรับผู้ใช้งาน โดยคง layout และ UX/UI แบบ mobile app เดิมเมื่อเปิดบน browser
+## ตรวจสอบ
 
 ```bash
-cd frontend-vue
-cp .env.example .env
-npm install
-npm run dev
+curl http://localhost:5101/health
+node backend-node/scripts/check-realtime.js
+npm --prefix frontend-vue run build
+npm --prefix admin-web run build
 ```
 
-ค่า env ที่ใช้ใน `frontend-vue/.env`
+`check-realtime.js` ยืนยันเฉพาะตัวส่ง; ตรวจการรับจริงและคำสั่ง tests ใน [REALTIME.md](docs/REALTIME.md#คำสั่งตรวจสอบโค้ด)
 
-```env
-VITE_API_BASE_URL=http://localhost:5101
-VITE_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
-```
+## เอกสาร
 
-ต้องเปิดใช้งาน Google Maps JavaScript API และจำกัด API key ตามโดเมนที่ใช้งานจริง
-
-คำสั่งที่ใช้บ่อย
-
-```bash
-npm run dev
-npm run build
-npm run preview
-```
-
-ค่าเริ่มต้นของ User Web App ใช้ Backend ที่ `http://localhost:5101`
-
-## Docker Setup
-
-รันทั้ง Backend, Admin Web และ User Web App ด้วย Docker Compose
-
-```bash
-docker compose up --build
-```
-
-URL สำหรับเข้าใช้งาน
-
-- Backend API: `http://localhost:5101`
-- Admin Web: `http://localhost:8180`
-- User Web App: `http://localhost:8181`
-- MongoDB ภายนอกเครื่อง: `mongodb://localhost:27017`
-
-ชุดนี้แยกจากโปรเจกต์ `MFU-Shuttle-Bus` เดิมด้วย database และ port ใหม่
-
-```env
-DB_NAME=shuttlebus_web_system
-USER_WEB_API_BASE_URL=http://localhost:5101
-VITE_API_BASE_URL=http://localhost:5101
-```
-
-ตัวอย่างรันพร้อมกำหนด API URL
-
-```bash
-USER_WEB_API_BASE_URL=http://localhost:5101 docker compose up --build
-```
-
-## API Overview
-
-Backend แบ่ง route หลักตามนี้
-
-- `/auth` - Admin login, JWT authentication และการจัดการบัญชีผ่าน Admin Web
-- `/station` - ข้อมูลสถานีและการจัดการสถานี
-- `/api/buses` - ข้อมูลรถ shuttle bus
-- `/api/report` - รายงาน
-- `/api/detector` - ข้อมูลจาก detector
-
-## Development Notes
-
-- ควรรัน MongoDB และ backend ก่อนเปิด Admin Web หรือ User Web App
-- ถ้าทดสอบจากเครื่องอื่นในวง LAN ให้เปลี่ยน API URL จาก `localhost` เป็น IP เครื่องที่รัน backend
-- ถ้ารันด้วย Docker ให้ดูรายละเอียดใน `docs/DOCKER.md`
-- อย่า commit ไฟล์ local config ที่มี key จริง เช่น `admin-web/.env` หรือ `frontend-vue/.env`
-- ไฟล์ build/cache เช่น `node_modules/`, `.dart_tool/` และ `build/` ไม่ควรนำเข้า git
-
-## Documentation
-
-- `docs/projectmap.md` - แผนที่โครงสร้าง repo และไฟล์ source truth สำหรับหาบั๊กหรือให้ AI อ่านต่อ
-- `docs/prd.md` - Product Requirements Document และ acceptance criteria
-- `docs/agent.md` - System/agent architecture และ workflow สำหรับ AI/agent
-- `docs/er.md` - ER/logical relationship ของ MongoDB collections
-- `docs/data.md` - Data dictionary, schema, indexes, seed และ backup
-- `docs/HANDBOOK.md` - คู่มือการใช้งานระบบสำหรับ user, admin และผู้ดูแลระบบ
-- `docs/HANDOVER.md` - checklist สำหรับเตรียมส่งมอบระบบ
-- `docs/DOCKER.md` - คู่มือรันระบบด้วย Docker
-- `docs/AI-WORKFLOW.md` - กติกาการให้ AI/agent ทำงานกับ repo นี้
-
-## Live vehicle GPS
-
-Before local or Docker startup, copy `backend-node/.env.gps.example` to `backend-node/.env.gps` and fill in the GPS account locally. Use Node.js 20.12+ and run `npm --prefix backend-node run check:gps`. See the [GPS setup guide](docs/GPS.md) for session handling, data freshness and verification still needed.
+- [HANDOVER.md](docs/HANDOVER.md) — เพื่อนรับงานเริ่มที่นี่
+- [HANDBOOK.md](docs/HANDBOOK.md) — วิธีใช้งานหน้าเว็บ
+- [REALTIME.md](docs/REALTIME.md) — Supabase, protocol, fallback, troubleshooting และงานที่ต่อยอดได้
+- [GPS.md](docs/GPS.md) — ตั้งค่าผู้ให้บริการและความสดของข้อมูล
+- [projectmap.md](docs/projectmap.md) — หาไฟล์ที่จะพัฒนาต่อ
+- [DOCKER.md](docs/DOCKER.md) — รันด้วย containers
+- [agent.md](docs/agent.md) — architecture และแนวทางอ่านโค้ด
+- [prd.md](docs/prd.md) — ขอบเขตและ requirement
+- [data.md](docs/data.md), [er.md](docs/er.md) — ข้อมูลและความสัมพันธ์
+- [AI-WORKFLOW.md](docs/AI-WORKFLOW.md) — แนวทางทำงานกับ AI ใน repo

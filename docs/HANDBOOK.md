@@ -6,7 +6,7 @@
 
 ระบบ MFU Shuttle Bus แบ่งเป็น 3 ส่วนหลัก
 
-- `frontend-vue/` แอป Flutter สำหรับผู้ใช้ทั่วไป
+- `frontend-vue/` เว็บ Vue 3 สำหรับผู้ใช้ทั่วไป
 - `admin-web/` เว็บผู้ดูแลระบบ
 - `backend-node/` Backend API และฐานข้อมูล MongoDB
 
@@ -196,72 +196,30 @@ Dashboard ใช้ดูภาพรวมระบบ
 
 ## 4. คู่มือการติดตั้งสำหรับผู้ดูแลระบบ
 
-### 4.1 Backend
+ทำตาม [HANDOVER.md](HANDOVER.md) สำหรับเครื่องใหม่ รวม dependencies, env และบัญชีทดสอบ
+Local ใช้ Backend พอร์ต 5101, Admin 5173 และ Passenger 5174 ตามคำสั่งที่ระบุในคู่มือ
+หากใช้ Docker อ่าน [DOCKER.md](DOCKER.md) ซึ่งใช้หน้าเว็บพอร์ต 8180/8181
 
-```bash
-cd backend-node
-npm install
-node app.js
-```
+### ข้อมูลรถแบบ Realtime
 
-Backend จะเปิดที่
+เปิดหน้าเว็บตามปกติ ไม่ต้องกดเปิด Realtime หรือเปิด Console เพื่อให้รถอัปเดต
+ระบบโหลดข้อมูลเริ่มต้นจาก API และรับข้อมูลรถใหม่ผ่าน Supabase เมื่อเชื่อมต่อได้
+หากการเชื่อมต่อหลุด ระบบใช้ API สำรองและโหลดข้อมูลใหม่เมื่อกลับ online
+รถจอดอาจมีตำแหน่งเดิม แม้ระบบกำลังรับข้อมูลอยู่; ETA ขึ้นกับความสด ทิศทาง และความเร็ว GPS
 
-```text
-http://localhost:5001
-```
-
-### 4.2 Admin Web
-
-```bash
-cd admin-web
-npm install
-cp .env.example .env
-npm run dev
-```
-
-ค่า env สำคัญ
-
-```env
-VITE_API_BASE_URL=http://localhost:5001
-VITE_GOOGLE_MAPS_API_KEY=YOUR_GOOGLE_MAPS_API_KEY
-```
-
-### 4.3 Flutter App
-
-```bash
-cd frontend-vue
-flutter pub get
-flutter run
-```
-
-Backend URL อยู่ที่
-
-```text
-frontend-vue/lib/services/api_service.dart
-```
-
-ถ้ารันบน iOS simulator สามารถใช้ `http://localhost:5001` ได้ ถ้ารันบน Android emulator อาจต้องใช้ `http://10.0.2.2:5001`
-
-### 4.4 Docker
-
-สามารถรันทั้งระบบด้วย Docker ได้จาก root project
-
-```bash
-docker compose up -d --build
-```
-
-ดูรายละเอียดเพิ่มเติมที่ `docs/DOCKER.md`
+จำนวนคนรอที่สถานี รายงาน และ detector ยังใช้การโหลด API ตามเดิม
+ตรวจเชิงเทคนิคที่ [REALTIME.md](REALTIME.md) และ [GPS.md](GPS.md)
 
 ## 5. การตรวจสอบก่อนใช้งานจริง
 
 ควรทดสอบรายการต่อไปนี้ก่อนส่งมอบหรือ deploy
 
-- Backend เปิดได้ที่ `http://localhost:5001`
+- Backend เปิดได้ที่ `http://localhost:5101`
 - MongoDB เชื่อมต่อได้
 - Admin Web เข้าสู่ระบบได้
 - Dashboard โหลดข้อมูลได้
 - หน้า Reports แสดงรายงานและเปลี่ยนสถานะได้
-- Flutter App เปิดแผนที่ได้
+- เว็บผู้โดยสาร Vue เปิดแผนที่ได้
 - เลือก From/To station แล้วเส้นทางขึ้นถูกต้อง
 - เลือก From/To station แล้วไม่สามารถเลือกสถานีซ้ำหรือย้อนทิศทาง outbound ได้
 - ส่ง report จากแอปแล้วเห็นใน Admin Web
@@ -271,7 +229,7 @@ docker compose up -d --build
 ## 6. ข้อควรระวัง
 
 - ห้าม commit API key จริงหรือไฟล์ `.env`
-- ถ้าเปลี่ยน backend URL ต้องแก้ทั้ง Admin Web และ Flutter App
+- ถ้าเปลี่ยน backend URL ต้องแก้ทั้ง Admin Web และ เว็บผู้โดยสาร Vue
 - ถ้าใช้มือถือจริง ต้องใช้ IP เครื่อง backend แทน `localhost`
 - Google Maps ต้องเปิด API และใส่ key ให้ถูกต้อง
 - ข้อมูลตัวอย่างใน Docker ใช้สำหรับ demo ไม่ควรใช้เป็นข้อมูลจริงใน production

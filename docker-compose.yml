@@ -35,6 +35,8 @@ services:
       CAMERA_URL: ${CAMERA_URL:-http://192.168.110.234:4747/video}
       SAVE_INTERVAL: ${SAVE_INTERVAL:-5}
       DETECTOR_ENABLED: ${INSTALL_DETECTOR:-true}
+      SUPABASE_URL: ${SUPABASE_URL:-}
+      SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
     volumes:
       - backend-runtime:/app/runtime
       - type: bind
@@ -53,6 +55,8 @@ services:
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:5101}
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
     image: mfu-shuttle-bus-admin-web:latest
     container_name: mfu-shuttle-web-admin
     restart: unless-stopped
@@ -68,6 +72,8 @@ services:
       args:
         VITE_API_BASE_URL: ${USER_WEB_API_BASE_URL:-http://localhost:5101}
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+        VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
+        VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}
     image: mfu-shuttle-bus-user-web:latest
     container_name: mfu-shuttle-web-user
     restart: unless-stopped
