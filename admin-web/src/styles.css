@@ -3113,6 +3113,24 @@ th {
 .dashboard-live-crowd-layout {
   margin-top: 4px;
   grid-template-columns: minmax(0, 1fr) minmax(330px, 0.55fr);
+  align-items: stretch;
+}
+
+.dashboard-live-crowd-layout .crowd-map-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.dashboard-live-crowd-layout .crowd-map-shell {
+  display: flex;
+  flex: 1;
+}
+
+.dashboard-live-crowd-layout .dashboard-crowd-map {
+  flex: 1;
+  min-width: 0;
+  min-height: clamp(300px, calc(100vh - 505px), 430px);
+  height: auto;
 }
 
 .dashboard-overview-page .dashboard-page-header h1 {
