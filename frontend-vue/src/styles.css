@@ -41,6 +41,12 @@ button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 3px
 .wordmark { justify-self: center; color: var(--mfu-gold); font-size: 28px; font-weight: 800; letter-spacing: 0; white-space: nowrap; }
 .wordmark span { color: var(--mfu-red); }
 .wordmark b { font-weight: 800; }
+.app-header.home-header { grid-template-columns: 76px minmax(0, 1fr) 76px; }
+.home-header .wordmark { font-size: clamp(12px, 3.7vw, 20px); }
+.language-switch { display: flex; align-items: center; justify-self: end; color: #b0b0b0; }
+.language-switch button { min-width: 34px; min-height: 36px; padding: 0 3px; border: 0; border-radius: 4px; background: transparent; color: #767676; font-size: 14px; font-weight: 500; }
+.language-switch button.active { color: var(--mfu-red); font-weight: 800; }
+.language-switch button:hover { background: #fff3f3; }
 .menu-btn, .language-btn, .back-btn, .page-home-btn, .drawer-close { border: 0; background: transparent; color: var(--mfu-red); }
 .menu-btn { width: 34px; height: 34px; display: grid; place-content: center; gap: 5px; padding: 6px; }
 .appbar-menu-btn { justify-self: start; }

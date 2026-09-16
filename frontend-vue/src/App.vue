@@ -13,8 +13,6 @@ import busTurnLeftUrl from '../assets/gemcar_turnleft.png';
 import busTurnRightUrl from '../assets/gemcar_turnright.png';
 import busIconUrl from '../assets/bus.png';
 import busStopUrl from '../assets/bus_stop_2.png';
-import thaiFlagUrl from '../assets/thai_flag.png';
-import englishFlagUrl from '../assets/eng_flag.png';
 import TransitPage from './pages/TransitPage.vue';
 import FavoritesPage from './pages/FavoritesPage.vue';
 import FeedbackPage from './pages/FeedbackPage.vue';
@@ -1214,7 +1212,11 @@ watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
 
 <template>
   <main class="web-shell"><section class="phone">
-    <header v-if="page === 'home'" class="app-header home-header"><button class="menu-btn appbar-menu-btn" type="button" aria-label="Menu" @click="isMenuOpen = true"><span></span><span></span><span></span></button><div class="wordmark"><span>MFU</span> <b>SHUTTLE BUS</b></div><button class="language-btn" type="button" @click="setLanguage(lang === 'th' ? 'en' : 'th')"><img :src="lang === 'th' ? thaiFlagUrl : englishFlagUrl" alt="" /></button></header>
+    <header v-if="page === 'home'" class="app-header home-header"><button class="menu-btn appbar-menu-btn" type="button" aria-label="Menu" @click="isMenuOpen = true"><span></span><span></span><span></span></button><div class="wordmark"><span>MFU</span> <b>SHUTTLE BUS</b></div><div class="language-switch" role="group" :aria-label="lang === 'th' ? 'เลือกภาษา' : 'Select language'">
+        <button type="button" :class="{ active: lang === 'th' }" :aria-pressed="lang === 'th'" aria-label="ภาษาไทย" lang="th" @click="setLanguage('th')">TH</button>
+        <span aria-hidden="true">|</span>
+        <button type="button" :class="{ active: lang === 'en' }" :aria-pressed="lang === 'en'" aria-label="English" lang="en" @click="setLanguage('en')">EN</button>
+      </div></header>
     <header v-else class="app-header page-header"><button class="back-btn" type="button" :aria-label="t.home" @click="goHome">‹</button><div class="page-title">{{ page === 'transit' ? t.transit : page === 'favorites' ? t.favorites : page === 'report' ? t.report : page === 'language' ? t.language : t.settings }}</div><button class="page-home-btn" type="button" :aria-label="t.home" :title="t.home" @click="goHome"><svg class="home-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M3 10.4 12 3l9 7.4v9.1c0 .8-.7 1.5-1.5 1.5H4.5c-.8 0-1.5-.7-1.5-1.5z" fill="currentColor" /><path d="M9.2 21v-5.7h5.6V21" fill="#fff" /></svg></button></header>
     <p v-if="message" class="notice">{{ message }}</p>
     <div v-if="isMenuOpen" class="menu-backdrop" @click.self="isMenuOpen = false">
