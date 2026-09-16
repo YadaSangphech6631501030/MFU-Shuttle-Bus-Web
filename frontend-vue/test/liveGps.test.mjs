@@ -1,10 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { canEstimateArrival, lastKnownPosition, interpolatePosition, holdStoppedPosition } from '../src/liveGps.ts';
+import { arrivalUnavailableReason, canEstimateArrival, lastKnownPosition, interpolatePosition, holdStoppedPosition } from '../src/liveGps.ts';
 
 const now = Date.parse('2026-09-15T14:00:00Z');
 const bus = { connectionStatus: 'fresh', feedHealthy: true, status: 'RUNNING', speedKph: 20,
   lastGpsAt: new Date(now).toISOString(), lat: 20.05, lng: 99.89 };
+
+test('arrival explains unassigned fleet and unknown speed without inventing an ETA', () => {
+  assert.equal(arrivalUnavailableReason([{ ...bus, line: null, speedKph: null }], ['line1'], now), 'speedMissing');
+  assert.equal(arrivalUnavailableReason([{ ...bus, line: 'line1', speedKph: null }], ['line1'], now), 'speedMissing');
+  assert.equal(arrivalUnavailableReason([{ ...bus, line: '1' }], ['line1'], now), 'headingMissing');
+  assert.equal(arrivalUnavailableReason([{ ...bus, line: 'line1', directionRaw: 90 }], ['line1'], now), 'noApproachingBus');
+});
+
+test('arrival distinguishes missing route, expired GPS and a stopped bus', () => {
+  const assigned = { ...bus, line: 'line1' };
+  assert.equal(arrivalUnavailableReason([assigned], [], now), 'routeMissing');
+  assert.equal(arrivalUnavailableReason([assigned], ['line1'], now + 30001), 'gpsMissing');
+  assert.equal(arrivalUnavailableReason([{ ...assigned, feedHealthy: false }], ['line1'], now), 'gpsMissing');
+  assert.equal(arrivalUnavailableReason([{ ...assigned, status: 'STOPPED', speedKph: 0 }], ['line1'], now), 'stopped');
+  // An unrelated line must not make a station report that its bus is stopped.
+  assert.equal(arrivalUnavailableReason([{ ...assigned, line: 'line2', status: 'STOPPED' }], ['line1'], now), 'gpsMissing');
+});
 
 test('stopped GPS jitter stays anchored while departure, arrival and large corrections are accepted', () => {
   const stopped = { ...bus, status: 'STOPPED', speedKph: 0 };

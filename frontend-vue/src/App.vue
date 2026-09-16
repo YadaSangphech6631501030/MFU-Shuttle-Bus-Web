@@ -2,7 +2,10 @@
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type ShuttleRoute, type Station } from './services/api';
-import { canEstimateArrival, gpsAgeMs, lastKnownPosition, interpolatePosition, holdStoppedPosition, ETA_MAX_AGE_MS } from './liveGps';
+import { arrivalUnavailableReason, canEstimateArrival, gpsAgeMs, lastKnownPosition, interpolatePosition, holdStoppedPosition, ETA_MAX_AGE_MS } from './liveGps';
+import { estimateRouteArrival, routeProgressAtPosition, routeBearingAtPosition, angleDifference } from './arrival';
+import { createGpsMotionEstimator } from './gpsMotion';
+import { arrivalStatusText, tripTimeText } from './arrivalDisplay';
 import { distanceMeters, findRide, findBoardingStop, type BoardingSuggestion } from './routePlanning';
 import busLeftUrl from '../assets/gemcar_left.png';
 import busRightUrl from '../assets/gemcar_right.png';
@@ -25,6 +28,7 @@ type RoutePoint = { lat: number; lng: number };
 type MapViewport = { center: RoutePoint; zoom: number };
 type BusMarkerEntry = { marker: any; key: string; position: RoutePoint; bearing: number | null; line: Line; turnReady: boolean; turnTimer?: number; animationFrame?: number; lastGpsAt?: string | null; lastMovement?: string };
 const gpsNow = ref(Date.now());
+const estimateGpsMotion = createGpsMotionEstimator();
 let gpsClockTimer: number | undefined;
 type GoogleMap = any;
 
@@ -359,80 +363,12 @@ function busPositionIsRecent(bus: Bus) {
 }
 
 // Project a GPS point onto a route so ETA and station direction use road distance.
-function routeProgressAtPosition(position: RoutePoint, path: RoutePoint[]) {
-  if (path.length < 2) return null;
-  let cumulativeDistance = 0;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-  let nearestProgress = 0;
-  let totalDistance = 0;
-
-  for (let index = 0; index < path.length - 1; index += 1) {
-    const start = path[index];
-    const end = path[index + 1];
-    const deltaLng = end.lng - start.lng;
-    const deltaLat = end.lat - start.lat;
-    const lengthSquared = deltaLng ** 2 + deltaLat ** 2;
-    const progress = lengthSquared === 0
-      ? 0
-      : Math.max(0, Math.min(1, ((position.lng - start.lng) * deltaLng + (position.lat - start.lat) * deltaLat) / lengthSquared));
-    const closest = { lat: start.lat + deltaLat * progress, lng: start.lng + deltaLng * progress };
-    const segmentDistance = distanceMeters(start, end);
-    const distanceToPath = distanceMeters(position, closest);
-    if (distanceToPath < nearestDistance) {
-      nearestDistance = distanceToPath;
-      nearestProgress = cumulativeDistance + segmentDistance * progress;
-    }
-    cumulativeDistance += segmentDistance;
-  }
-
-  totalDistance = cumulativeDistance;
-  return { distanceFromStart: nearestProgress, distanceToPath: nearestDistance, totalDistance };
-}
-
 function routeDistanceBetween(first: RoutePoint, second: RoutePoint, path?: RoutePoint[]) {
   if (!path) return distanceMeters(first, second);
   const firstProgress = routeProgressAtPosition(first, path);
   const secondProgress = routeProgressAtPosition(second, path);
   if (!firstProgress || !secondProgress) return distanceMeters(first, second);
   return Math.abs(firstProgress.distanceFromStart - secondProgress.distanceFromStart);
-}
-
-function bearingBetween(from: RoutePoint, to: RoutePoint) {
-  const fromLat = from.lat * Math.PI / 180;
-  const toLat = to.lat * Math.PI / 180;
-  const deltaLng = (to.lng - from.lng) * Math.PI / 180;
-  const y = Math.sin(deltaLng) * Math.cos(toLat);
-  const x = Math.cos(fromLat) * Math.sin(toLat) - Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
-  return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
-}
-
-function routeBearingAtPosition(position: RoutePoint, path: RoutePoint[]) {
-  if (path.length < 2) return null;
-  let nearestBearing: number | null = null;
-  let nearestDistance = Number.POSITIVE_INFINITY;
-
-  for (let index = 0; index < path.length - 1; index += 1) {
-    const start = path[index];
-    const end = path[index + 1];
-    const deltaLng = end.lng - start.lng;
-    const deltaLat = end.lat - start.lat;
-    const lengthSquared = deltaLng ** 2 + deltaLat ** 2;
-    const progress = lengthSquared === 0
-      ? 0
-      : Math.max(0, Math.min(1, ((position.lng - start.lng) * deltaLng + (position.lat - start.lat) * deltaLat) / lengthSquared));
-    const closest = { lat: start.lat + deltaLat * progress, lng: start.lng + deltaLng * progress };
-    const distance = (position.lng - closest.lng) ** 2 + (position.lat - closest.lat) ** 2;
-    if (distance < nearestDistance) {
-      nearestDistance = distance;
-      nearestBearing = bearingBetween(start, end);
-    }
-
-  }
-  return nearestBearing;
-}
-
-function angleDifference(first: number, second: number) {
-  return Math.abs(((first - second + 540) % 360) - 180);
 }
 
 // Combine route geometry with GPS heading to identify the vehicle's travel direction.
@@ -667,6 +603,13 @@ function updateLiveBusMarkers() {
     if (entry.animationFrame !== undefined) cancelAnimationFrame(entry.animationFrame);
     entry.animationFrame = undefined;
     const markerPosition = entry.marker.getPosition();
+    // Maps can leave a marker without a position after a map loading failure.
+    // Restore the latest GPS fix before attempting to animate it.
+    if (!markerPosition) {
+      entry.position = position;
+      entry.marker.setPosition(position);
+      return;
+    }
     const from = { lat: markerPosition.lat(), lng: markerPosition.lng() };
     if (bus.status !== 'RUNNING') {
       if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
@@ -814,32 +757,21 @@ function stationArrivalMinutes(station: Station) {
   return null;
 }
 
+function stationArrivalText(station: Station) {
+  const minutes = stationArrivalMinutes(station);
+  if (minutes !== null) return minuteText(minutes);
+  return arrivalStatusText(arrivalReasonForLines(station.lines || []), lang.value);
+}
+
+function arrivalReasonForLines(lines: string[]) {
+  return lines.length && !lines.some(line => (routePathCache.get(line)?.length || 0) >= 2)
+    ? 'routeMissing' : arrivalUnavailableReason(buses.value, lines, gpsNow.value);
+}
+
 function stationArrivalMinutesForLine(station: Station, line?: Line): number | null {
-  const stationPosition = { lat: station.lat, lng: station.lng };
   const routePath = line ? routePathCache.get(line) : undefined;
   if (!line || !routePath || routePath.length < 2) return null;
-  const estimates = buses.value
-    .filter((bus) => {
-      if (!busPosition(bus) || !canEstimateArrival(bus, gpsNow.value)) return false;
-      const busLine = busLineKey(bus);
-      return busLine === line;
-    })
-    .map((bus) => {
-      const position = busPosition(bus);
-      if (!position) return null;
-      const progress = routeProgressAtPosition(position, routePath);
-      const stationProgress = routeProgressAtPosition(stationPosition, routePath);
-      const bearing = routeBearingAtPosition(position, routePath);
-      if (!progress || !stationProgress || progress.distanceToPath > 100 || stationProgress.distanceToPath > 100
-        || bearing === null || typeof bus.directionRaw !== 'number' || !Number.isFinite(bus.directionRaw)) return null;
-      const forward = angleDifference(bearing, bus.directionRaw) <= 90;
-      const distance = (stationProgress.distanceFromStart - progress.distanceFromStart) * (forward ? 1 : -1);
-      // A vehicle that has already passed this stop cannot be treated as approaching it.
-      if (distance < 0) return null;
-      return Math.max(1, Math.ceil(distance / (bus.speedKph! * 1000 / 3600) / 60));
-    })
-    .filter((value): value is number => value !== null);
-  return estimates.length ? Math.min(...estimates) : null;
+  return estimateRouteArrival(station, line, routePath, buses.value, gpsNow.value);
 }
 
 const tripEstimate = computed(() => {
@@ -850,7 +782,8 @@ const tripEstimate = computed(() => {
   if (!line || !selectedRouteAvailable.value) return { available: false as const };
   const rideMinutes = Math.max(1, Math.ceil(distanceMeters(from, to) / 8.33 / 60));
   const arrivalMinutes = stationArrivalMinutesForLine(from, line);
-  return { available: true as const, arrivalMinutes, rideMinutes, totalMinutes: arrivalMinutes === null ? null : arrivalMinutes + rideMinutes };
+  const text = tripTimeText(arrivalMinutes, rideMinutes, arrivalReasonForLines([line]), lang.value);
+  return { available: true as const, arrivalMinutes, rideMinutes, arrivalText: text.arrival, totalText: text.total };
 });
 
 const originAllowedDestinations: Record<string, Set<string>> = {
@@ -918,7 +851,7 @@ const popupIcons = {
 function stationPopupHtml(station: Station) {
   const statusClass = stationStatusClass(station.status);
   const isFavorite = favoriteIds.value.includes(station.id);
-  return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${minuteText(stationArrivalMinutes(station))}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}">${stationStatusLabel(station.status)}</b></div></div>`;
+  return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${stationArrivalText(station)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}">${stationStatusLabel(station.status)}</b></div></div>`;
 }
 
 function bindStationPopupActions(element: HTMLElement, station: Station) {
@@ -1205,7 +1138,7 @@ async function refreshLiveBusData() {
   if (liveBusRequestActive) return;
   liveBusRequestActive = true;
   try {
-    buses.value = await api.getBuses();
+    buses.value = estimateGpsMotion(await api.getBuses(), Date.now());
     updateLiveBusMarkers();
     refreshStationPopup();
     refreshBusPopup();
@@ -1241,7 +1174,7 @@ async function refreshPublicData() {
 
 let publicDataSignatureValue = '';
 
-async function loadData() { isLoading.value = true; message.value = ''; try { const routeList = await api.getRoutes().catch(() => null); const [stationLists, busList] = await Promise.all([Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))), api.getBuses().catch(() => [])]); const nextStations = combinePublicStations(stationLists); stations.value = nextStations; buses.value = busList; routes.value = routeList || []; routesLoaded.value = routeList !== null; syncRouteControls(routeList); publicDataSignatureValue = publicDataSignature(nextStations, routes.value); } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
+async function loadData() { isLoading.value = true; message.value = ''; try { const routeList = await api.getRoutes().catch(() => null); const [stationLists, busList] = await Promise.all([Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))), api.getBuses().catch(() => [])]); const nextStations = combinePublicStations(stationLists); stations.value = nextStations; buses.value = estimateGpsMotion(busList, Date.now()); routes.value = routeList || []; routesLoaded.value = routeList !== null; syncRouteControls(routeList); publicDataSignatureValue = publicDataSignature(nextStations, routes.value); } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
 onMounted(async () => {
   window.addEventListener('pagehide', saveMapViewport);
   gpsClockTimer = window.setInterval(() => {
@@ -1309,11 +1242,14 @@ watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
       </aside>
     </div>
 
-  <section v-if="page === 'home'" class="screen home-screen"><div ref="mapElement" class="campus-map google-map" role="application" aria-label="MFU campus map"><div v-if="mapError" class="map-error">{{ mapError.includes('API_KEY') ? t.mapKeyMissing : t.mapLoadFailed }}</div></div>
+  <section v-if="page === 'home'" class="screen home-screen">
+      <!-- Google Maps owns this element's children; keep Vue content outside it. -->
+      <div ref="mapElement" class="campus-map google-map" role="application" aria-label="MFU campus map"></div>
+      <div v-if="mapError" class="map-error" role="alert">{{ mapError.includes('API_KEY') ? t.mapKeyMissing : t.mapLoadFailed }}</div>
       <div v-if="isTripSearchCollapsed" class="collapsed-trip" @click="isTripSearchCollapsed = false"><strong>{{ fromQuery }} <span>→</span> {{ toQuery }}</strong><span>⌄</span></div><div v-else class="trip-card"><div class="trip-marker-column" aria-hidden="true"><span class="origin-marker"></span><i></i><span class="destination-marker"></span></div><div class="trip-fields"><label><span>{{ t.from }}</span><div class="input-wrap"><input v-model="fromQuery" :placeholder="t.fromStation" @focus="activeSearchField = 'from'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedFromId = ''; showStationSuggestions = true" /><button v-if="fromQuery" class="clear-input" type="button" @click="clearStation('from')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'from'" class="suggestions"><button v-for="station in fromMatches" :key="station.id" type="button" @click="setStation('from', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div><label><span>{{ t.to }}</span><div class="input-wrap"><input v-model="toQuery" :placeholder="t.toStation" @focus="activeSearchField = 'to'; showStationSuggestions = true" @blur="hideStationSuggestionsSoon" @input="selectedToId = ''; showStationSuggestions = true" /><button v-if="toQuery" class="clear-input" type="button" @click="clearStation('to')">×</button></div></label><div v-if="showStationSuggestions && activeSearchField === 'to'" class="suggestions"><button v-for="station in toMatches" :key="station.id" type="button" @click="setStation('to', station)"><span :class="{ favorite: favoriteIds.includes(station.id) }">{{ favoriteIds.includes(station.id) ? '♥' : '●' }}</span>{{ stationName(station) }}</button></div></div><div class="trip-actions"><button v-if="selectedFromId && selectedToId" class="icon-action" type="button" @click="isTripSearchCollapsed = true">⌃</button><button class="icon-action" type="button" :disabled="!fromQuery && !toQuery" :aria-label="t.swap" @click="swapStations">⇅</button></div></div>
       <div class="line-selector"><button v-for="route in availableRoutes" :key="route.id" :class="{ active: selectedLine === route.id, 'line-two-active': route.id === 'line2' && selectedLine === route.id }" type="button" @click.stop="selectedLine = route.id"><img :src="busIconUrl" alt="" :style="{ filter: route.id === 'line2' ? 'grayscale(1)' : undefined }" />{{ route.id === 'line1' ? t.line1 : route.id === 'line2' ? t.line2 : (lang === 'th' ? route.nameTH || route.name : route.name) }}</button></div>
 
-      <div v-if="tripEstimate && isTripSearchCollapsed" class="trip-estimate"><div class="trip-estimate-head"><div class="trip-estimate-title"><strong>{{ t.tripSummary }}</strong><button class="trip-estimate-close" type="button" :aria-label="t.close" @click="resetTrip">×</button></div><span>{{ fromQuery }} <b>→</b> {{ toQuery }}</span></div><template v-if="tripEstimate.available"><div class="trip-estimate-row"><span class="station-map-popup-icon bus" aria-hidden="true" v-html="popupIcons.bus"></span><strong>{{ t.busArrival }}</strong><b>{{ minuteText(tripEstimate.arrivalMinutes) }}</b></div><div class="trip-estimate-row"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span><strong>{{ t.rideTime }}</strong><b>{{ tripEstimate.rideMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row total"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="13" r="7" /><path d="M12 13V9M9 3h6M12 3v3M17 6l2-2" /></svg></span><strong>{{ t.totalTime }}</strong><b>{{ minuteText(tripEstimate.totalMinutes) }}</b></div></template><div v-else class="trip-estimate-unavailable" role="status">
+      <div v-if="tripEstimate && isTripSearchCollapsed" class="trip-estimate"><div class="trip-estimate-head"><div class="trip-estimate-title"><strong>{{ t.tripSummary }}</strong><button class="trip-estimate-close" type="button" :aria-label="t.close" @click="resetTrip">×</button></div><span>{{ fromQuery }} <b>→</b> {{ toQuery }}</span></div><template v-if="tripEstimate.available"><div class="trip-estimate-row"><span class="station-map-popup-icon bus" aria-hidden="true" v-html="popupIcons.bus"></span><strong>{{ t.busArrival }}</strong><b>{{ tripEstimate.arrivalText }}</b></div><div class="trip-estimate-row"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="12" r="8" /><path d="M12 7v5l3 2" /></svg></span><strong>{{ t.rideTime }}</strong><b>{{ tripEstimate.rideMinutes }} {{ t.minutes }}</b></div><div class="trip-estimate-row total"><span class="trip-estimate-icon" aria-hidden="true"><svg viewBox="0 0 24 24" role="img"><circle cx="12" cy="13" r="7" /><path d="M12 13V9M9 3h6M12 3v3M17 6l2-2" /></svg></span><strong>{{ t.totalTime }}</strong><b>{{ tripEstimate.totalText }}</b></div></template><div v-else class="trip-estimate-unavailable" role="status">
         <p v-if="!routePlanReady">{{ lang === 'th' ? 'กำลังคำนวณเส้นทาง…' : 'Calculating route…' }}</p>
         <p v-else-if="selectedFromId === selectedToId">{{ lang === 'th' ? 'ต้นทางและปลายทางเป็นสถานีเดียวกัน' : 'Origin and destination are the same station.' }}</p>
         <template v-else>

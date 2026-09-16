@@ -20,6 +20,24 @@ export function canEstimateArrival(bus: Bus, now: number) {
     && bus.status === 'RUNNING' && typeof bus.speedKph === 'number' && Number.isFinite(bus.speedKph) && bus.speedKph > 1;
 }
 
+export function arrivalUnavailableReason(buses: Bus[], lines: string[], now: number) {
+  const normalizeLine = (line: string | null | undefined) => {
+    const value = (line || '').trim().toLowerCase();
+    return /^\d+$/.test(value) ? `line${value}` : value;
+  };
+  if (!lines.length) return 'routeMissing';
+  const candidates = buses.filter(bus => !normalizeLine(bus.line) || lines.includes(normalizeLine(bus.line)));
+  const fresh = candidates.filter(bus => bus.feedHealthy === true && bus.connectionStatus === 'fresh'
+    && gpsAgeMs(bus, now) >= 0 && gpsAgeMs(bus, now) <= ETA_MAX_AGE_MS && lastKnownPosition(bus, now));
+  if (!fresh.length) return 'gpsMissing';
+  const moving = fresh.filter(bus => bus.status === 'RUNNING');
+  if (!moving.length) return fresh.some(bus => bus.status === 'STOPPED') ? 'stopped' : 'gpsMissing';
+  const withSpeed = moving.filter(bus => canEstimateArrival(bus, now));
+  if (!withSpeed.length) return 'speedMissing';
+  if (!withSpeed.some(bus => typeof bus.directionRaw === 'number' && Number.isFinite(bus.directionRaw))) return 'headingMissing';
+  return 'noApproachingBus';
+}
+
 export function lastKnownPosition(bus: Bus, now: number) {
   const age = gpsAgeMs(bus, now);
   if (age < 0 || age > LAST_POSITION_MAX_AGE_MS || typeof bus.lat !== 'number' || typeof bus.lng !== 'number'
