@@ -132,7 +132,7 @@ function normalizeTracker(row, vehicle, now, speedUnit = 'unknown') {
   };
 }
 
-function createGpsService({ config, getDB, client, now = Date.now, vehicles = fleet }) {
+function createGpsService({ config, getDB, client, now = Date.now, vehicles = fleet, onSaved, onSync }) {
   let state = config.enabled ? 'unconfigured' : 'disabled';
   let lastSuccessAt = null, lastAttemptAt = null, errorCode = null;
   let invalidCount = 0, unmappedCount = 0, timer = null, stopped = true, inFlight = null;
@@ -182,10 +182,17 @@ function createGpsService({ config, getDB, client, now = Date.now, vehicles = fl
       lastSuccessAt = now();
       state = invalidCount ? 'partial_data' : 'connected';
       errorCode = invalidCount ? 'invalid_tracker' : null;
+      // Publishing must not delay polling or turn a successful DB write into a GPS error.
+      if (onSaved) void Promise.resolve().then(onSaved).catch(() => {
+        console.warn('GPS realtime notification failed');
+      });
     } catch (error) {
       state = error instanceof GpsError ? error.code : 'storage_error';
       errorCode = state;
     }
+    if (onSync) void Promise.resolve().then(onSync).catch(() => {
+      console.warn('GPS snapshot refresh failed');
+    });
     return status();
   }
 

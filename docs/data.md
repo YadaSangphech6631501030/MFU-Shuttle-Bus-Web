@@ -7,7 +7,7 @@
 | Config | Default | Source |
 |---|---|---|
 | `MONGO_URI` | `mongodb://localhost:27017/` | `backend-node/config.js` |
-| `DB_NAME` | `shuttlebus_system` | `backend-node/config.js` |
+| `DB_NAME` | `shuttlebus_web_system` | `backend-node/config.js` |
 | Docker Mongo service | `mongodb://mongo:27017/` | `docker-compose.yml` |
 | Docker exposed port | `27017:27017` | `docker-compose.yml` |
 
@@ -17,7 +17,7 @@
 |---|---|---|
 | `users` | admin accounts and auth roles for Admin Web; passenger app uses guest flow | `backend-node/routes/auth.js` |
 | `stations` | shuttle bus stations, map coordinates, line membership, CCTV config | `backend-node/routes/station.js` |
-| `buses` | bus status and current station index | `backend-node/routes/bus.routes.js`, `backend-node/engines/movement.engine.js` |
+| `buses` | persisted GPS records; API projects registered vehicles | `backend-node/services/gps.js`, `backend-node/config/gps-fleet.json` |
 | `reports` | passenger reports and feedback | `backend-node/routes/report.routes.js` |
 
 ## 3. `users` Collection
@@ -78,29 +78,36 @@ Seed:
 - `backend-node/seed/seed_station.js` seeds 22 stations
 - `docker/mongo-init/backup/shuttlebus_system.stations.json` contains demo backup with Thai names
 
-## 5. `buses` Collection
+## 5. `buses` Collection และ public projection
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `_id` | ObjectId | Yes | MongoDB id |
-| `busNumber` | string | Yes | visible bus number |
-| `line` | string | Yes | `"1"` or `"2"` in current data |
-| `currentStationIndex` | number | Yes | current station index for movement simulation |
-| `status` | string | Yes | `STOPPED`, `RUNNING`, `ARRIVING` |
-| `lat` | number | Optional | supported by admin type for future GPS |
-| `lng` | number | Optional | supported by admin type for future GPS |
-| `speedKph` | number | Optional | supported by admin type |
-| `heading` | number | Optional | supported by admin type |
-| `accuracy` | number | Optional | supported by admin type |
-| `lastGpsAt` | string/date | Optional | supported by admin type |
-| `updatedAt` | string/date | Optional | supported by admin type |
-| `driverName` | string | Optional | supported by admin type |
+ตารางนี้อธิบาย GPS records ปัจจุบัน ข้อมูล demo เก่าอาจมี fields อื่นที่ยังอยู่ใน collection แต่ไม่ใช่แหล่ง GPS ของ API
 
-Behavior:
+| Field ใน MongoDB | Type | ความหมาย |
+|---|---|---|
+| `_id` | string | `ppgps:<imei>` |
+| `source` | string | `ppgps` |
+| `imei`, `providerId` | string | device/provider identifiers ใช้เฉพาะหลังบ้าน |
+| `busId` | string | รหัสรถจาก fleet registry |
+| `lat`, `lng` | number | พิกัดที่ผ่าน validation |
+| `speedRaw` | number/null | ความเร็วตาม provider |
+| `speedUnit` | string | หน่วยที่ตั้งค่า หรือ `unknown` |
+| `speedKph` | number/null | คำนวณเฉพาะเมื่อยืนยันหน่วยแล้ว |
+| `directionRaw` | number/null | heading ที่ผ่าน validation |
+| `movement` | string | `moving`, `stopped`, `unknown` |
+| `alarm` | string | ข้อความ provider จำกัดความยาว |
+| `lastGpsAt` | date | เวลา GPS จริง |
+| `receivedAt` | date | เวลารับข้อมูลใน backend |
 
-- `/api/buses` returns all documents
-- `movement.engine.js` updates `status` and `currentStationIndex` every 5 seconds
-- Seed file creates 6 demo buses
+`GET /api/buses` ไม่คืน raw documents ทั้งหมด แต่ประกอบรถตาม `config/gps-fleet.json`
+พร้อม `busNumber`, `line`, `status`, `feedHealthy`, `freshness`, `connectionStatus` และเวลา ISO
+ไม่ส่ง `imei` หรือ `providerId` ออกทาง public projection
+พิกัดอาจเป็น null สำหรับรถที่ยังไม่มี GPS และ `line` อาจเป็น null สำหรับรถที่ยังไม่กำหนดสาย
+
+`GET /api/buses/snapshot` และ Broadcast ใช้ projection เดียวกัน ห่อด้วย `schemaVersion`, `streamId`, `sequence`, `capturedAt`
+snapshot cache อยู่ในหน่วยความจำ Node ไม่ใช่ collection ใหม่หรือ Postgres table
+MongoDB ยังเป็นฐานข้อมูลหลัก ดู [REALTIME.md](REALTIME.md) สำหรับ contract และสิทธิ์การรับข้อมูล
+
+`seed_bus.js` สร้างรถจำลองเก่า ไม่ได้ใช้แทน provider GPS และไม่ควรรันเป็นขั้นตอนบังคับของการติดตั้ง Realtime
 
 ## 6. `reports` Collection
 
@@ -191,7 +198,7 @@ When changing schema or seed data:
 
 1. Update backend validation and route behavior
 2. Update Admin Web `admin-web/src/types.ts`
-3. Update Flutter parsing/use if affected
+3. Update both Vue consumers if affected
 4. Update seed files and Docker backup JSON
 5. Update `docs/data.md`
 6. Update `docs/er.md` if relationships changed

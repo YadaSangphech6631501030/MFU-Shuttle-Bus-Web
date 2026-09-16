@@ -12,7 +12,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const token = localStorage.getItem(TOKEN_KEY);
   const headers = new Headers(options.headers);
 
-  if (!(options.body instanceof FormData)) {
+  if (options.body != null && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -130,6 +130,10 @@ export const api = {
       method: 'DELETE',
       auth: true,
     });
+  },
+
+  getBusSnapshot(signal: AbortSignal) {
+    return request<unknown>('/api/buses/snapshot', { signal, cache: 'no-store' });
   },
 
   getBuses() {

@@ -2,6 +2,8 @@
 // Main application shell: owns shared state, map rendering, and page navigation.
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { api, type Bus, type ShuttleRoute, type Station } from './services/api';
+import { supabase } from './services/supabase';
+import { startBusFeed } from './services/busFeed';
 import { arrivalUnavailableReason, canEstimateArrival, gpsAgeMs, lastKnownPosition, interpolatePosition, holdStoppedPosition, ETA_MAX_AGE_MS } from './liveGps';
 import { estimateRouteArrival, routeProgressAtPosition, routeBearingAtPosition, angleDifference } from './arrival';
 import { createGpsMotionEstimator } from './gpsMotion';
@@ -1098,8 +1100,7 @@ async function ensureHomeMap() {
   window.google?.maps?.event.trigger(campusMap, 'resize');
   await renderGoogleMap();
 }
-let liveBusTimer: number | undefined;
-let liveBusRequestActive = false;
+let busFeed: ReturnType<typeof startBusFeed<Bus>> | undefined;
 let publicDataTimer: number | undefined;
 let publicDataRequestActive = false;
 
@@ -1132,19 +1133,15 @@ function publicDataSignature(nextStations: Station[], nextRoutes: ShuttleRoute[]
   });
 }
 
-async function refreshLiveBusData() {
-  if (liveBusRequestActive) return;
-  liveBusRequestActive = true;
-  try {
-    buses.value = estimateGpsMotion(await api.getBuses(), Date.now());
-    updateLiveBusMarkers();
-    refreshStationPopup();
-    refreshBusPopup();
-  } catch {
-    // Keep the last known positions visible when one polling request fails.
-  } finally {
-    liveBusRequestActive = false;
-  }
+function receiveBuses(nextBuses: Bus[]) {
+  buses.value = estimateGpsMotion(nextBuses, Date.now());
+  updateLiveBusMarkers();
+  refreshStationPopup();
+  refreshBusPopup();
+}
+
+function refreshBusFeedOnReturn() {
+  if (document.visibilityState === 'visible') void busFeed?.refresh();
 }
 
 async function refreshPublicData() {
@@ -1172,9 +1169,32 @@ async function refreshPublicData() {
 
 let publicDataSignatureValue = '';
 
-async function loadData() { isLoading.value = true; message.value = ''; try { const routeList = await api.getRoutes().catch(() => null); const [stationLists, busList] = await Promise.all([Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))), api.getBuses().catch(() => [])]); const nextStations = combinePublicStations(stationLists); stations.value = nextStations; buses.value = estimateGpsMotion(busList, Date.now()); routes.value = routeList || []; routesLoaded.value = routeList !== null; syncRouteControls(routeList); publicDataSignatureValue = publicDataSignature(nextStations, routes.value); } catch (error) { message.value = error instanceof Error ? error.message : t.value.mapLoadFailed; } finally { isLoading.value = false; } }
+async function loadData() {
+  isLoading.value = true;
+  message.value = '';
+  try {
+    const routeList = await api.getRoutes().catch(() => null);
+    const stationLists = await Promise.all(routeIdsForData(routeList).map(line => api.getStations(line)));
+    const nextStations = combinePublicStations(stationLists);
+    stations.value = nextStations;
+    routes.value = routeList || [];
+    routesLoaded.value = routeList !== null;
+    syncRouteControls(routeList);
+    publicDataSignatureValue = publicDataSignature(nextStations, routes.value);
+  } catch (error) {
+    message.value = error instanceof Error ? error.message : t.value.mapLoadFailed;
+  } finally {
+    isLoading.value = false;
+  }
+}
+
 onMounted(async () => {
   window.addEventListener('pagehide', saveMapViewport);
+  window.addEventListener('online', refreshBusFeedOnReturn);
+  document.addEventListener('visibilitychange', refreshBusFeedOnReturn);
+  busFeed = startBusFeed<Bus>({
+    client: supabase, loadSnapshot: signal => api.getBusSnapshot(signal), onBuses: receiveBuses,
+  });
   gpsClockTimer = window.setInterval(() => {
     gpsNow.value = Date.now();
     updateLiveBusMarkers();
@@ -1184,7 +1204,6 @@ onMounted(async () => {
   await loadData();
   await initGoogleMap();
   startUserLocationTracking();
-  liveBusTimer = window.setInterval(() => void refreshLiveBusData(), 5000);
   publicDataTimer = window.setInterval(() => void refreshPublicData(), 15000);
 });
 onBeforeUnmount(() => {
@@ -1192,7 +1211,9 @@ onBeforeUnmount(() => {
   window.removeEventListener('pagehide', saveMapViewport);
   clearBusMarkers();
   mapResizeObserver?.disconnect();
-  if (liveBusTimer) window.clearInterval(liveBusTimer);
+  busFeed?.stop();
+  window.removeEventListener('online', refreshBusFeedOnReturn);
+  document.removeEventListener('visibilitychange', refreshBusFeedOnReturn);
   if (gpsClockTimer) window.clearInterval(gpsClockTimer);
   if (publicDataTimer) window.clearInterval(publicDataTimer);
   if (userLocationWatchId !== undefined) navigator.geolocation?.clearWatch(userLocationWatchId);

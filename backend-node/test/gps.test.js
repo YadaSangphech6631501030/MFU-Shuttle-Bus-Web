@@ -112,6 +112,27 @@ function memoryDB() {
   return { collection: () => collection, records, writes: () => writes };
 }
 
+test('realtime hook runs after successful storage without blocking GPS sync', async () => {
+  const db = memoryDB();
+  let calls = 0;
+  let fail = false;
+  const gps = createGpsService({ config, vehicles: [vehicle], getDB: () => db, now: () => timestamp,
+    client: { async getTrackers() { if (fail) throw new GpsError('connection_error'); return [sample]; } },
+    onSaved() {
+      calls++;
+      assert.equal(db.writes(), 1);
+      assert.equal(gps.status().healthy, true);
+      return new Promise(() => {}); // A stalled publisher cannot block the worker.
+    },
+  });
+  await gps.sync();
+  assert.equal(calls, 1);
+  fail = true;
+  await gps.sync();
+  assert.equal(calls, 1);
+  assert.equal(gps.status().state, 'connection_error');
+});
+
 test('fresh/stale/unknown, upstream failure, older points, registry and public-field projection', async () => {
   let clock = timestamp, data = [sample], fail = false;
   const db = memoryDB();
@@ -207,6 +228,9 @@ test('bus API keeps the array contract and restricts connection diagnostics to a
   const runtime = require('../services/gps-runtime');
   t.mock.method(runtime, 'buses', async () => [{ busId: 'MFU03', connectionStatus: 'unknown' }]);
   t.mock.method(runtime, 'status', () => ({ state: 'unconfigured', configured: false, healthy: false }));
+  const snapshot = { schemaVersion: 1, streamId: 'test', sequence: 1,
+    capturedAt: new Date(timestamp).toISOString(), buses: [{ busId: 'MFU03', lat: null, lng: null }] };
+  t.mock.method(runtime, 'snapshot', async () => snapshot);
   const app = express();
   app.use('/api', require('../routes/bus.routes'));
   const server = app.listen(0, '127.0.0.1');
@@ -217,6 +241,10 @@ test('bus API keeps the array contract and restricts connection diagnostics to a
   assert.equal(publicResponse.status, 200);
   assert.equal(publicResponse.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await publicResponse.json(), [{ busId: 'MFU03', connectionStatus: 'unknown' }]);
+  const snapshotResponse = await fetch(`${base}/snapshot`);
+  assert.equal(snapshotResponse.status, 200);
+  assert.equal(snapshotResponse.headers.get('cache-control'), 'no-store');
+  assert.deepEqual(await snapshotResponse.json(), snapshot);
   assert.equal((await fetch(`${base}/gps-status`)).status, 401);
   for (const [role, expected] of [['user', 403], ['admin', 200]]) {
     const token = jwt.sign({ role }, SECRET_KEY);
@@ -227,6 +255,10 @@ test('bus API keeps the array contract and restricts connection diagnostics to a
   const failed = await fetch(base);
   assert.equal(failed.status, 500);
   assert.equal((await failed.text()).includes('database-secret'), false);
+  t.mock.method(runtime, 'snapshot', async () => { throw new Error('database-secret'); });
+  const failedSnapshot = await fetch(`${base}/snapshot`);
+  assert.equal(failedSnapshot.status, 503);
+  assert.equal((await failedSnapshot.text()).includes('database-secret'), false);
 });
 
 test('timeouts are bounded and invalid vehicles do not replace validated positions', async t => {

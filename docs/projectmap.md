@@ -1,183 +1,95 @@
-# Project Map: MFU Shuttle Bus
+# แผนที่โค้ด MFU Shuttle Bus Web
 
-เอกสารนี้ใช้เป็นแผนที่โปรเจกต์สำหรับอาจารย์ ผู้ดูแลระบบ และ AI agent ที่ต้องอ่าน repo เพื่อหาบั๊กหรือพัฒนาต่อ
+อัปเดต 16 กันยายน 2026 อ้างอิงไฟล์ที่ runtime ใช้งานจริง
+เครื่องใหม่เริ่มที่ [HANDOVER.md](HANDOVER.md) และ [REALTIME.md](REALTIME.md)
 
-## 1. ภาพรวมโครงสร้าง
-
-```text
-MFU-Shuttle-Bus/
-├── README.md
-├── docker-compose.yml
-├── backend-node/
-├── admin-web/
-├── frontend-vue/
-├── docker/
-└── docs/
-```
-
-| Path | หน้าที่ |
-|---|---|
-| `README.md` | ภาพรวมระบบ วิธี setup แบบ manual และรายการเอกสาร |
-| `docker-compose.yml` | รวม service สำหรับ MongoDB, Backend, Admin Web และ Flutter Web profile |
-| `backend-node/` | Backend API ด้วย Node.js, Express และ MongoDB |
-| `admin-web/` | เว็บผู้ดูแลระบบด้วย Vue 3, TypeScript และ Vite |
-| `frontend-vue/` | แอปผู้ใช้ด้วย Flutter แม้ชื่อโฟลเดอร์จะมีคำว่า vue |
-| `docker/` | ข้อมูล import MongoDB และ backup ตัวอย่าง |
-| `docs/` | เอกสารประกอบโปรเจกต์ทั้งหมด |
-
-## 2. Backend Map
+## โครงสร้าง
 
 ```text
-backend-node/
-├── app.js
-├── config.js
-├── db.js
-├── routes/
-├── middleware/
-├── engines/
-├── services/
-├── seed/
-├── python/
-└── Dockerfile
+backend-node/       Express, MongoDB, GPS worker, detector
+admin-web/src/     Vue 3 สำหรับผู้ดูแลระบบ
+frontend-vue/src/  Vue 3 สำหรับผู้โดยสาร
+frontend-vue/assets/ รูปรถและ GeoJSON สำรอง
+docker/            ข้อมูล demo และ MongoDB initialization
+docs/              คู่มือระบบและส่งต่องาน
 ```
 
-| File/Folder | หน้าที่ |
+ไฟล์ Flutter ที่อาจเหลืออยู่ไม่ใช่ entrypoint ของเว็บปัจจุบัน ให้พัฒนาใน `src/`
+
+## Backend
+
+| ไฟล์ | หน้าที่ |
 |---|---|
-| `backend-node/app.js` | จุดเริ่ม Express app, mount routes, เปิด `/health`, connect MongoDB และเริ่ม movement engine |
-| `backend-node/config.js` | อ่านค่า `PORT`, `MONGO_URI`, `DB_NAME`, `SECRET_KEY`, `CAMERA_URL`, `SAVE_INTERVAL` |
-| `backend-node/db.js` | สร้าง MongoDB client และ expose `connectDB()`, `getDB()` |
-| `backend-node/routes/auth.js` | Admin login, JWT auth, profile endpoints และ admin user management |
-| `backend-node/routes/station.js` | Public station by line และ admin station CRUD |
-| `backend-node/routes/bus.routes.js` | อ่านข้อมูลรถที่ `/api/buses` |
-| `backend-node/routes/report.routes.js` | สร้าง report/feedback, อ่านรายงาน, update status, delete |
-| `backend-node/routes/detector.routes.js` | Start/stop/status/frame/stream ของ CCTV detector ต่อสถานี |
-| `backend-node/middleware/jwt.js` | ตรวจ JWT จาก `Authorization: Bearer <token>` |
-| `backend-node/middleware/admin.js` | จำกัด endpoint ที่ต้องเป็น `role: admin` |
-| `backend-node/engines/movement.engine.js` | จำลองสถานะรถทุก 5 วินาที |
-| `backend-node/services/detector.js` | ควบคุม process detector และ path frame runtime |
-| `backend-node/python/detector.py` | Python detector ที่ใช้ YOLO/OpenCV |
-| `backend-node/seed/seed_station.js` | seed สถานี 22 จุด และ index `id`, `lines` |
-| `backend-node/seed/seed_bus.js` | seed รถตัวอย่าง 6 คัน |
-| `backend-node/Dockerfile` | build backend image และ optional detector dependency |
+| `backend-node/app.js` | โหลด root `.env`, เชื่อม DB, เริ่ม GPS และ mount routes |
+| `backend-node/config.js` | ค่า Node/MongoDB และโหลด `.env.gps` |
+| `backend-node/db.js` | MongoDB connection และ initialize routes |
+| `backend-node/services/gps.js` | อ่าน/validate GPS, บันทึก MongoDB, health และ public bus projection |
+| `backend-node/config/gps-fleet.json` | จับคู่ device กับรถ/สาย |
+| `backend-node/services/gps-runtime.js` | เชื่อม GPS กับ snapshot/publisher |
+| `backend-node/services/bus-snapshots.js` | cache, stream ID และ sequence |
+| `backend-node/services/supabase.js` | ส่ง private Broadcast โดยใช้ Secret key |
+| `backend-node/sql/realtime.sql` | policy รับข้อมูลรถและห้าม client ส่ง |
+| `backend-node/services/routes.js` | จัดการเส้นทางรถ |
+| `backend-node/services/detector.js` | ควบคุม Python detector |
+| `backend-node/python/detector.py` | YOLO/OpenCV และบันทึกจำนวนคน |
 
-### Backend Route Truth
-
-| Base path | Source file | ใช้โดย |
+| API | ไฟล์ route | ผู้ใช้ |
 |---|---|---|
-| `/auth` | `backend-node/routes/auth.js` | Admin Web; Flutter passenger app ไม่ใช้ login ใน workflow ปัจจุบัน |
-| `/station` | `backend-node/routes/station.js` | Flutter app, Admin Web |
-| `/api/buses` | `backend-node/routes/bus.routes.js` | Flutter app, Admin Web |
-| `/api/report` | `backend-node/routes/report.routes.js` | Flutter app, Admin Web |
-| `/api/detector` | `backend-node/routes/detector.routes.js` | Admin Web |
-| `/health` | `backend-node/app.js` | Docker health/smoke check |
+| `/auth` | `backend-node/routes/auth.js` | Node JWT, profile/admin management |
+| `/station` | `backend-node/routes/station.js` | สถานีสาธารณะและ admin CRUD |
+| `/api/buses`, `/api/buses/snapshot` | `backend-node/routes/bus.routes.js` | ข้อมูลรถสาธารณะ |
+| `/api/buses/gps-status` | `backend-node/routes/bus.routes.js` | diagnostics เฉพาะ admin |
+| `/api/routes` | `backend-node/routes/route.routes.js` | เส้นทางผู้โดยสารและการจัดการโดย admin |
+| `/api/report` | `backend-node/routes/report.routes.js` | รายงาน/feedback |
+| `/api/detector` | `backend-node/routes/detector.routes.js` | CCTV/detector |
+| `/health` | `backend-node/app.js` | process health |
 
-## 3. Admin Web Map
+## Frontend ที่ทั้งสองเว็บมี
 
-```text
-admin-web/
-├── src/
-│   ├── App.vue
-│   ├── main.ts
-│   ├── services/api.ts
-│   ├── types.ts
-│   └── page/
-├── Dockerfile
-├── nginx.conf
-├── package.json
-└── vite.config.ts
-```
-
-| File/Folder | หน้าที่ |
+| ไฟล์ภายใต้แต่ละเว็บ | หน้าที่ |
 |---|---|
-| `admin-web/src/App.vue` | Shell หลักของ Admin Web |
-| `admin-web/src/main.ts` | Vue app bootstrap |
-| `admin-web/src/services/api.ts` | API wrapper และ token storage สำหรับ admin |
-| `admin-web/src/types.ts` | TypeScript types ของ station, bus, report, user, detector |
-| `admin-web/src/page/Dashboard.vue` | Dashboard ภาพรวม, station map, crowd alerts |
-| `admin-web/src/page/Stations.vue` | เพิ่ม แก้ ลบสถานี |
-| `admin-web/src/page/StationCCTV.vue` | จัดการ CCTV/detector ต่อสถานี |
-| `admin-web/src/page/Buses.vue` | ดูสถานะรถ |
-| `admin-web/src/page/Reports.vue` | ดู report, feedback, history และเปลี่ยนสถานะ |
-| `admin-web/src/page/Users.vue` | จัดการ admin/user |
-| `admin-web/Dockerfile` | build static web แล้ว serve ด้วย Nginx |
+| `src/main.ts` | Vue bootstrap |
+| `src/App.vue` | state และการเชื่อม UI กับข้อมูล |
+| `src/services/api.ts` | REST wrapper, session, snapshot GET |
+| `src/services/supabase.ts` | client จาก Publishable key; ไม่มี config ก็ fallback ได้ |
+| `src/services/busFeed.ts` | subscribe, buffering, ordering, reconnect, HTTP fallback |
+| `src/styles.css` | รูปแบบหน้าเว็บ |
 
-## 4. Flutter App Map
+`busFeed.ts` มีสองสำเนาที่ต้องแก้ให้ตรงกัน การทดสอบ `frontend-vue/test/busFeed.test.mjs` ตรวจทั้งคู่
 
-```text
-frontend-vue/
-├── lib/
-│   ├── main.dart
-│   ├── services/
-│   └── user/
-├── assets/
-│   └── routes/
-├── pubspec.yaml
-├── Dockerfile
-└── nginx.conf
-```
+## ผู้โดยสาร
 
-| File/Folder | หน้าที่ |
+| ไฟล์ | หน้าที่ |
 |---|---|
-| `frontend-vue/lib/main.dart` | Flutter entrypoint เข้า `Homepages` โดยไม่ต้อง login |
-| `frontend-vue/lib/services/api_service.dart` | เรียก backend API สำหรับ station, bus, report และมี auth helper เก่าที่ยังไม่ใช้ใน passenger workflow ปัจจุบัน |
-| `frontend-vue/lib/services/language_service.dart` | จัดการภาษา EN/TH |
-| `frontend-vue/lib/services/route_asset_service.dart` | โหลด GeoJSON route asset |
-| `frontend-vue/lib/user/homepages.dart` | หน้า Home, Google Map, From/To search, route display, bus markers |
-| `frontend-vue/lib/user/bus_controller.dart` | จำลองตำแหน่ง/ทิศทางรถบน route |
-| `frontend-vue/lib/user/bus_station.dart` | รายการสถานี |
-| `frontend-vue/lib/user/favorite_station.dart` | บันทึกสถานีโปรด |
-| `frontend-vue/lib/user/report_page.dart` | ส่ง report และ feedback |
-| `frontend-vue/lib/user/signin01.dart` | legacy loading/sign-in screen; ไม่ใช่หน้าเริ่มต้นของ passenger app ปัจจุบัน |
-| `frontend-vue/lib/user/user_setting.dart` | เมนู setting/user navigation |
-| `frontend-vue/assets/routes/polyline_line1_mfu.geojson` | เส้นทางสาย 1 |
-| `frontend-vue/assets/routes/polyline_line2_mfu.geojson` | เส้นทางสาย 2 |
-| `frontend-vue/Dockerfile` | build Flutter Web สำหรับ Docker profile |
+| `frontend-vue/src/App.vue` | Google Map, หมุดรถ/สถานี, From/To, TH/EN และ popups |
+| `frontend-vue/src/arrival.ts` | รถที่กำลังจะถึงสถานีและ ETA ตามเส้นทาง |
+| `frontend-vue/src/arrivalDisplay.ts` | ข้อความเวลาถึง/สาเหตุที่ยังไม่มี ETA |
+| `frontend-vue/src/liveGps.ts` | อายุ GPS, การเคลื่อนหมุดและเงื่อนไข ETA |
+| `frontend-vue/src/gpsMotion.ts` | ประเมิน speed/heading จาก GPS สองจุดเมื่อจำเป็น |
+| `frontend-vue/src/routePlanning.ts` | ค้นหาเส้นทางและจุดขึ้นรถ |
+| `frontend-vue/src/pages/TransitPage.vue` | รายการสาย/สถานี |
+| `frontend-vue/src/pages/FavoritesPage.vue` | สถานีโปรด |
+| `frontend-vue/src/pages/FeedbackPage.vue` | รายงานและ feedback |
+| `frontend-vue/src/pages/SettingsPage.vue` | การตั้งค่า |
 
-## 5. Docker And Data Map
+## แอดมิน
 
-| Path | หน้าที่ |
-|---|---|
-| `docker-compose.yml` | service orchestration |
-| `docker/mongo-init/001-import-backup.sh` | import backup เข้า MongoDB ตอนสร้าง volume ใหม่ |
-| `docker/mongo-init/backup/shuttlebus_system.stations.json` | backup stations |
-| `docker/mongo-init/backup/shuttlebus_system.buses.json` | backup buses |
-| `docker/mongo-init/backup/shuttlebus_system.users.json` | backup users และ admin demo |
-| `docker/mongo-init/backup/shuttlebus_system.reports.json` | backup reports ปัจจุบันว่าง |
+หน้า UI อยู่ใน `admin-web/src/page/`: `Dashboard.vue`, `Stations.vue`, `StationCCTV.vue`,
+`Buses.vue`, `Routes.vue`, `Reports.vue`, `Users.vue`
+state ส่วนกลางและ timers ส่วนใหญ่อยู่ที่ `admin-web/src/App.vue`; types อยู่ `src/types.ts`
 
-## 6. Documentation Map
+## ทดสอบและเอกสาร
 
-| File | จุดประสงค์ |
-|---|---|
-| `docs/projectmap.md` | แผนที่ repo และ source truth |
-| `docs/prd.md` | Product Requirements Document |
-| `docs/agent.md` | System/agent architecture และ workflow สำหรับ AI |
-| `docs/er.md` | ER/data relationship ของ MongoDB collections |
-| `docs/data.md` | Data dictionary, indexes, seed, backup |
-| `docs/HANDBOOK.md` | คู่มือ user/admin/operator |
-| `docs/HANDOVER.md` | Checklist ส่งมอบและสอบระบบ |
-| `docs/DOCKER.md` | วิธี build/run ด้วย Docker |
-| `docs/AI-WORKFLOW.md` | กติกาการให้ AI/agent ทำงานกับ repo นี้ |
+- `backend-node/test/gps.test.js`: provider, GPS, API และ auth ของ diagnostics
+- `backend-node/test/bus-snapshots.test.js`: shared cache และ version
+- `backend-node/test/supabase.test.js`: ตัวส่ง, failure recovery และ overlapping sends
+- `frontend-vue/test/busFeed.test.mjs`: ตัวรับทั้งสองเว็บและ reconnect/order
+- `frontend-vue/test/arrival.test.mjs`, `liveGps.test.mjs`, `routePlanning.test.mjs`: ETA/เส้นทาง
+- [HANDOVER.md](HANDOVER.md): เพื่อนรับงานเริ่มที่นี่
+- [REALTIME.md](REALTIME.md): protocol, setup และ troubleshooting
+- [GPS.md](GPS.md): provider และ freshness
+- [HANDBOOK.md](HANDBOOK.md): วิธีใช้หน้าเว็บ
+- [DOCKER.md](DOCKER.md): build/run containers
+- [data.md](data.md), [er.md](er.md): ฐานข้อมูลและความสัมพันธ์
 
-## 7. Files To Avoid Editing Directly
-
-| Path | เหตุผล |
-|---|---|
-| `node_modules/` | dependency generated |
-| `frontend-vue/.dart_tool/` | Flutter generated cache |
-| `frontend-vue/build/` | build output |
-| `admin-web/dist/` | build output ถ้ามี |
-| `backend-node/runtime/` | runtime frame/output จาก detector |
-| `.env` และ config ที่มี key จริง | มี secret/API key |
-
-## 8. Common Debug Starting Points
-
-| อาการ | เริ่มดูที่ |
-|---|---|
-| Backend เปิดไม่ได้ | `backend-node/app.js`, `backend-node/config.js`, `backend-node/db.js` |
-| MongoDB ไม่มีข้อมูล | `docker/mongo-init/001-import-backup.sh`, `backend-node/seed/` |
-| Admin login ไม่ได้ | `backend-node/routes/auth.js`, `admin-web/src/services/api.ts` |
-| Admin station CRUD มีปัญหา | `backend-node/routes/station.js`, `admin-web/src/page/Stations.vue` |
-| Flutter map/route ไม่ขึ้น | `frontend-vue/lib/user/homepages.dart`, `frontend-vue/lib/services/route_asset_service.dart` |
-| From/To route เลือกไม่ได้ | `frontend-vue/lib/user/homepages.dart` |
-| Report ไม่ขึ้นใน admin | `frontend-vue/lib/user/report_page.dart`, `backend-node/routes/report.routes.js`, `admin-web/src/page/Reports.vue` |
-| CCTV detector ใช้ไม่ได้ | `backend-node/routes/detector.routes.js`, `backend-node/services/detector.js`, `backend-node/python/detector.py` |
+อย่าแก้ `node_modules`, `dist` หรือ `backend-node/runtime` เป็น source code และอย่า commit `.env`/`.env.gps`

@@ -58,7 +58,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const headers = new Headers(options.headers);
   const token = localStorage.getItem(TOKEN_KEY);
 
-  if (!(options.body instanceof FormData)) {
+  if (options.body != null && !(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json');
   }
 
@@ -132,6 +132,10 @@ export const api = {
 
   getStations(line: string) {
     return request<Station[]>(`/station/${encodeURIComponent(line)}`, { cache: 'no-store' });
+  },
+
+  getBusSnapshot(signal: AbortSignal) {
+    return request<unknown>('/api/buses/snapshot', { signal, cache: 'no-store' });
   },
 
   getBuses() {
