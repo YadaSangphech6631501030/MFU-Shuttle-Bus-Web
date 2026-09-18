@@ -1,14 +1,9 @@
-const path = require('node:path');
-
-require('dotenv').config({
-  path: path.resolve(__dirname, '../.env'),
-});
+const { PORT } = require('./config');
 
 const express = require("express");
 const cors = require("cors");
 
 const { connectDB } = require("./db");
-const { PORT } = require("./config");
 
 const authRoutes = require("./routes/auth");
 const stationRoutes = require("./routes/station");

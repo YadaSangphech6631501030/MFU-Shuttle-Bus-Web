@@ -27,24 +27,19 @@ services:
     restart: unless-stopped
     ports:
       - "5101:5101"
+    env_file:
+      - ./.env
     environment:
       PORT: 5101
       MONGO_URI: mongodb://mongo:27017/
       DB_NAME: ${DB_NAME:-shuttlebus_web_system}
       SECRET_KEY: ${SECRET_KEY:-super_secret_key_123}
-      CAMERA_URL: ${CAMERA_URL:-http://192.168.110.234:4747/video}
       SAVE_INTERVAL: ${SAVE_INTERVAL:-5}
       DETECTOR_ENABLED: ${INSTALL_DETECTOR:-true}
       SUPABASE_URL: ${SUPABASE_URL:-}
       SUPABASE_SECRET_KEY: ${SUPABASE_SECRET_KEY:-}
     volumes:
       - backend-runtime:/app/runtime
-      - type: bind
-        source: ./backend-node/.env.gps
-        target: /app/.env.gps
-        read_only: true
-        bind:
-          create_host_path: false
     depends_on:
       mongo:
         condition: service_healthy
@@ -70,7 +65,7 @@ services:
     build:
       context: ./frontend-vue
       args:
-        VITE_API_BASE_URL: ${USER_WEB_API_BASE_URL:-http://localhost:5101}
+        VITE_API_BASE_URL: ${USER_WEB_API_BASE_URL:-${VITE_API_BASE_URL:-http://localhost:5101}}
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
         VITE_SUPABASE_URL: ${VITE_SUPABASE_URL:-}
         VITE_SUPABASE_PUBLISHABLE_KEY: ${VITE_SUPABASE_PUBLISHABLE_KEY:-}

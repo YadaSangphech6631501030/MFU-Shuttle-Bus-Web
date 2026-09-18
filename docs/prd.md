@@ -188,6 +188,9 @@ Collections หลัก:
 1. Manual setup ด้วย Node.js, MongoDB, เว็บ Vue/Vite
 2. Docker Compose จาก root project
 
+ทั้งสองแบบใช้ root `.env` ไฟล์เดียวสำหรับ Backend, GPS และเว็บทั้งสอง โดยมี `.env.example` ที่ root เป็นแม่แบบ
+ค่าลับฝั่ง Backend ต้องไม่ถูกส่งไป browser; Vite เปิดเผยเฉพาะตัวแปร `VITE_*`
+
 คำสั่ง Docker หลัก:
 
 ```bash

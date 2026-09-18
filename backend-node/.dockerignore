@@ -2,9 +2,8 @@ node_modules
 runtime
 npm-debug.log*
 .env
-.env.gps
+.env.*
 .DS_Store
 *.log
-/yolov8s.pt
 __pycache__
 *.pyc

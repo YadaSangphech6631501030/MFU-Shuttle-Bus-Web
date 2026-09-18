@@ -1,5 +1,4 @@
-const path = require('node:path');
-require('dotenv').config({ path: path.resolve(__dirname, '../../.env'), quiet: true });
+require('../config');
 const { randomUUID } = require('node:crypto');
 const { createBusPublisher } = require('../services/supabase');
 

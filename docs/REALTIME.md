@@ -25,7 +25,7 @@ Supabase ไม่ได้ติดตามการเปลี่ยนแ�
 ## ตั้งค่า Supabase ครั้งแรก
 
 1. ใช้โปรเจกต์ Supabase ของทีม หรือสร้างโปรเจกต์สำหรับสภาพแวดล้อมใหม่
-2. คัดลอก Project URL และ Publishable key ไป `admin-web/.env` และ `frontend-vue/.env`
+2. คัดลอก Project URL และ Publishable key ไปตัวแปร `VITE_SUPABASE_*` ใน root `.env` สำหรับทั้งสองเว็บ
 3. คัดลอก Project URL และ Secret key ไป root `.env` สำหรับ Node
 4. เปิด [backend-node/sql/realtime.sql](../backend-node/sql/realtime.sql) คัดลอกทั้งหมดไป Supabase → SQL Editor → New query → Run
 5. ตรวจว่ามี policy `mfu_bus_receive` และ `mfu_bus_no_client_send` ในผลลัพธ์
@@ -38,14 +38,14 @@ SQL สามารถรันซ้ำเพื่อปรับ policy ส�
 
 ## ไฟล์ env
 
-Root `.env` สำหรับ backend:
+ทุกส่วนใช้ root `.env` ไฟล์เดียว ส่วนสำหรับ Backend:
 
 ```env
 SUPABASE_URL=https://YOUR_PROJECT.supabase.co
 SUPABASE_SECRET_KEY=sb_secret_REPLACE_ME
 ```
 
-ใน `.env` ของเว็บทั้งสอง:
+ส่วนสำหรับเว็บทั้งสองใน root `.env` เดียวกัน:
 
 ```env
 VITE_API_BASE_URL=http://localhost:5101
@@ -54,7 +54,8 @@ VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
 ```
 
 ค่าเหล่านี้เป็นตัวอย่าง ต้องแทนด้วยค่าจริงของทีม Secret key ใช้ได้เฉพาะ Node และไม่ต้องส่งให้คนที่ทำเฉพาะ UI
-`backend-node/app.js` โหลด root `.env`; environment ที่กำหนดให้ process อยู่แล้วมีผลก่อนค่าในไฟล์
+`backend-node/config.js` โหลด root `.env` ให้ API, seed และ scripts; environment ที่กำหนดให้ process อยู่แล้วมีผลก่อนค่าในไฟล์
+Vite ทั้งสองเว็บใช้ `envDir` ที่ root และเปิดเผยเฉพาะตัวแปร `VITE_*`
 Docker ส่ง Secret key เข้า backend ตอนรัน และส่ง Publishable key เข้า Vite ตอน build
 
 ## Protocol ที่โค้ดใช้
