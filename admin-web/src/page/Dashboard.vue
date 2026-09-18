@@ -1,8 +1,9 @@
 <script setup lang="ts">
+import { crowdLevel, crowdColor } from '../services/crowd';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { CrowdThresholds, Station } from '../types';
 
-type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
 
 const props = defineProps<{
   lang: 'th' | 'en';
@@ -31,14 +32,13 @@ function stationWaiting(station: Station) {
 function densityLevel(station: Station): DensityLevel {
   const waiting = stationWaiting(station);
 
-  if (waiting >= props.crowdThresholds.high) return 'HIGH';
-  if (waiting >= props.crowdThresholds.medium) return 'MEDIUM';
-  return 'LOW';
+  return crowdLevel(waiting, props.crowdThresholds);
 }
 
 function densityLabel(level: DensityLevel) {
   if (level === 'HIGH') return props.text.high;
   if (level === 'MEDIUM') return props.text.medium;
+  if (level === 'UNKNOWN') return props.lang === 'th' ? 'นอกช่วงที่กำหนด' : 'Outside ranges';
   return props.text.low;
 }
 
@@ -157,7 +157,7 @@ onUnmounted(() => {
               ]"
             >
               <button class="station-load-main" type="button" @click="$emit('focusStation', item.station)">
-                <span class="load-dot" aria-hidden="true"></span>
+                <span class="load-dot" :style="{ backgroundColor: crowdColor(item.level, crowdThresholds) }" aria-hidden="true"></span>
                 <span class="station-load-name">
                   <strong>{{ item.station.name }}</strong>
                   <small>{{ stationLineLabel(item.station) }}</small>
@@ -174,9 +174,9 @@ onUnmounted(() => {
         <article class="dashboard-chart-panel crowd-guide-panel">
           <h2>{{ text.dispatchGuide }}</h2>
           <div class="crowd-guide-list">
-            <p><span class="guide-dot high"></span><strong>{{ text.high }}</strong> {{ densityAdvice('HIGH') }}</p>
-            <p><span class="guide-dot medium"></span><strong>{{ text.medium }}</strong> {{ densityAdvice('MEDIUM') }}</p>
-            <p><span class="guide-dot low"></span><strong>{{ text.low }}</strong> {{ densityAdvice('LOW') }}</p>
+            <p><span class="guide-dot high" :style="{ backgroundColor: crowdColor('high', crowdThresholds) }"></span><strong>{{ text.high }}</strong> {{ densityAdvice('HIGH') }}</p>
+            <p><span class="guide-dot medium" :style="{ backgroundColor: crowdColor('medium', crowdThresholds) }"></span><strong>{{ text.medium }}</strong> {{ densityAdvice('MEDIUM') }}</p>
+            <p><span class="guide-dot low" :style="{ backgroundColor: crowdColor('low', crowdThresholds) }"></span><strong>{{ text.low }}</strong> {{ densityAdvice('LOW') }}</p>
           </div>
         </article>
       </aside>

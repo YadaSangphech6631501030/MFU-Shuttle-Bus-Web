@@ -4,6 +4,7 @@ const router = express.Router();
 const { getDB } = require("../db");
 const tokenRequired = require("../middleware/jwt");
 const adminOnly = require("../middleware/admin");
+const { getCrowdThresholds, crowdLevel } = require('../services/settings');
 
 const allowedStatuses = ["LOW", "MEDIUM", "HIGH"];
 
@@ -240,17 +241,17 @@ router.get("/:line", async (req, res) => {
       lines: line
     }).toArray();
 
+   const thresholds = await getCrowdThresholds(db);
    const updatedStations = data.map((s) => {
     const publicStation = publicStationFrom(s);
     let waiting = s.waiting ?? 0;
 
-  let status = "LOW";
-  if (waiting >= 10) status = "HIGH";
-  else if (waiting >= 5) status = "MEDIUM";
+  const status = crowdLevel(waiting, thresholds);
 
   let eta = Math.floor(Math.random() * 6) + 3;
 
-  return { ...publicStation, waiting, status, eta };
+  const statusColor = thresholds.colors[status.toLowerCase()] || '#64748b';
+  return { ...publicStation, waiting, status, statusColor, eta };
 });
 
     res.json(updatedStations);

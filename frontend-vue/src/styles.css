@@ -233,6 +233,7 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .station-map-popup-row strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; font-weight: 700; }
 .station-map-popup-row b { color: #777; font-size: 12px; font-weight: 700; white-space: nowrap; }
 .station-map-popup-status { padding: 3px 7px; border-radius: 999px; text-align: center; }
+.station-map-popup-status.unknown { background: #eef1f5; color: #64748b !important; }
 .station-map-popup-status.low { background: rgba(46,125,50,.1); color: #2e7d32 !important; }
 .station-map-popup-status.medium { background: rgba(188,153,69,.14); color: var(--mfu-gold) !important; }
 .station-map-popup-status.high { background: rgba(210,35,42,.1); color: var(--mfu-red) !important; }

@@ -23,14 +23,16 @@ export type Station = {
   lng: number;
   lines: string[];
   waiting?: number;
-  status?: 'LOW' | 'MEDIUM' | 'HIGH';
+  status?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
   cameraUrl?: string;
   detectionRoi?: Array<[number, number]>;
 };
 
 export type CrowdThresholds = {
-  medium: number;
-  high: number;
+  colors?: { low: string; medium: string; high: string };
+  low: { min: number; max: number | null };
+  medium: { min: number; max: number | null };
+  high: { min: number; max: number | null };
 };
 
 export type Bus = {
