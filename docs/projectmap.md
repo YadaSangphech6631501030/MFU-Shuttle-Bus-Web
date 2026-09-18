@@ -1,11 +1,12 @@
 # แผนที่โค้ด MFU Shuttle Bus Web
 
-อัปเดต 16 กันยายน 2026 อ้างอิงไฟล์ที่ runtime ใช้งานจริง
+อัปเดต 18 กันยายน 2026 อ้างอิงไฟล์ที่ runtime ใช้งานจริง
 เครื่องใหม่เริ่มที่ [HANDOVER.md](HANDOVER.md) และ [REALTIME.md](REALTIME.md)
 
 ## โครงสร้าง
 
 ```text
+.env.example       แม่แบบเดียวสำหรับ root .env ที่ทุกส่วนใช้ร่วมกัน
 backend-node/       Express, MongoDB, GPS worker, detector
 admin-web/src/     Vue 3 สำหรับผู้ดูแลระบบ
 frontend-vue/src/  Vue 3 สำหรับผู้โดยสาร
@@ -14,14 +15,14 @@ docker/            ข้อมูล demo และ MongoDB initialization
 docs/              คู่มือระบบและส่งต่องาน
 ```
 
-ไฟล์ Flutter ที่อาจเหลืออยู่ไม่ใช่ entrypoint ของเว็บปัจจุบัน ให้พัฒนาใน `src/`
+เว็บปัจจุบันเป็น Vue/Vite ให้พัฒนาใน `src/` ส่วนโค้ดเก่าที่ไม่ได้เชื่อมกับ runtime และไฟล์ซ้ำที่นำออกสามารถดูย้อนหลังใน Git
 
 ## Backend
 
 | ไฟล์ | หน้าที่ |
 |---|---|
-| `backend-node/app.js` | โหลด root `.env`, เชื่อม DB, เริ่ม GPS และ mount routes |
-| `backend-node/config.js` | ค่า Node/MongoDB และโหลด `.env.gps` |
+| `backend-node/app.js` | เชื่อม DB, เริ่ม GPS และ mount routes |
+| `backend-node/config.js` | โหลด root `.env` ให้ API, seed และ scripts; ค่า Node/MongoDB/GPS |
 | `backend-node/db.js` | MongoDB connection และ initialize routes |
 | `backend-node/services/gps.js` | อ่าน/validate GPS, บันทึก MongoDB, health และ public bus projection |
 | `backend-node/config/gps-fleet.json` | จับคู่ device กับรถ/สาย |
@@ -32,6 +33,7 @@ docs/              คู่มือระบบและส่งต่อง�
 | `backend-node/services/routes.js` | จัดการเส้นทางรถ |
 | `backend-node/services/detector.js` | ควบคุม Python detector |
 | `backend-node/python/detector.py` | YOLO/OpenCV และบันทึกจำนวนคน |
+| `backend-node/python/yolov8s.pt` | โมเดล YOLO ที่ detector ใช้งาน |
 
 | API | ไฟล์ route | ผู้ใช้ |
 |---|---|---|
@@ -56,6 +58,7 @@ docs/              คู่มือระบบและส่งต่อง�
 | `src/styles.css` | รูปแบบหน้าเว็บ |
 
 `busFeed.ts` มีสองสำเนาที่ต้องแก้ให้ตรงกัน การทดสอบ `frontend-vue/test/busFeed.test.mjs` ตรวจทั้งคู่
+`vite.config.ts` ของแต่ละเว็บกำหนด `envDir` ไปที่ root เพื่ออ่าน `.env` ร่วมกัน
 
 ## ผู้โดยสาร
 
@@ -80,6 +83,7 @@ state ส่วนกลางและ timers ส่วนใหญ่อยู
 
 ## ทดสอบและเอกสาร
 
+- `backend-node/test/config.test.js`: root env, การรันจากโฟลเดอร์อื่น และ environment overrides
 - `backend-node/test/gps.test.js`: provider, GPS, API และ auth ของ diagnostics
 - `backend-node/test/bus-snapshots.test.js`: shared cache และ version
 - `backend-node/test/supabase.test.js`: ตัวส่ง, failure recovery และ overlapping sends
@@ -92,4 +96,4 @@ state ส่วนกลางและ timers ส่วนใหญ่อยู
 - [DOCKER.md](DOCKER.md): build/run containers
 - [data.md](data.md), [er.md](er.md): ฐานข้อมูลและความสัมพันธ์
 
-อย่าแก้ `node_modules`, `dist` หรือ `backend-node/runtime` เป็น source code และอย่า commit `.env`/`.env.gps`
+อย่าแก้ `node_modules`, `dist` หรือ `backend-node/runtime` เป็น source code และอย่า commit `.env`

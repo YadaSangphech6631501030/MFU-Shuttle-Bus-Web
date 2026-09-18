@@ -237,5 +237,6 @@ A task is done only when:
 - `frontend-vue/` is Vue 3/Vite; use `src/` as the active source.
 - Admin Web is Vue 3/Vite under `admin-web/`.
 - Backend mounted routes use native MongoDB driver, not Mongoose.
-- `backend-node/controller/bus.controller.js` references a missing model and is not mounted by `app.js`; do not use it as route truth.
+- Mounted files in `backend-node/routes/` are the route truth; obsolete controllers and the simulated movement engine have been removed.
+- All services share the root `.env`; keep `.env.example` at the root as the only template.
 - Runtime detector frames under `backend-node/runtime/` are generated data.

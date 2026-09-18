@@ -5,11 +5,11 @@
 ## เตรียมก่อนรัน
 
 1. ติดตั้งและเปิด Docker Desktop หรือ Docker Engine พร้อม Compose
-2. คัดลอก root `.env.example` เป็น `.env` และ `backend-node/.env.gps.example` เป็น `backend-node/.env.gps` เฉพาะไฟล์ที่ยังไม่มี
+2. คัดลอก root `.env.example` เป็น `.env` เฉพาะเมื่อยังไม่มีไฟล์
 3. กรอกค่าของทีมตาม [HANDOVER.md](HANDOVER.md) และตั้งสิทธิ์ Supabase ตาม [REALTIME.md](REALTIME.md)
 4. ถ้าทำเฉพาะเว็บ ตั้ง `INSTALL_DETECTOR=false` ใน root `.env` เพื่อลด dependency Python/YOLO ตอน build
 
-ต้องมี `.env.gps` แม้จะตั้ง `GPS_ENABLED=false` เพราะ Compose mount ไฟล์นี้แบบ read-only
+ค่า GPS อยู่ใน root `.env` ด้วย และถูกส่งเข้า Backend ผ่าน `env_file` ตอนรัน
 อย่าเปิด local MongoDB/Node ค้างบนพอร์ตเดียวกับ Compose
 
 ## รันและหยุด
@@ -41,15 +41,17 @@ docker compose down
 
 ## Environment
 
-Compose อ่าน root `.env` ไม่ได้อ่าน `.env` ในแต่ละเว็บเป็นแหล่ง build args
+Compose, Backend และ Vite ทั้งสองเว็บอ่าน root `.env` ไฟล์เดียวกัน
+Compose ส่งค่าฝั่ง Backend ผ่าน `env_file` และส่งเฉพาะค่าหน้าเว็บผ่าน build args โดยไม่คัดลอก `.env` เข้า image
 
 | ตัวแปร | ผู้ใช้ค่า |
 |---|---|
 | `DB_NAME` | MongoDB/Node ค่าเริ่มต้น `shuttlebus_web_system` |
-| `SECRET_KEY`, `CAMERA_URL`, `SAVE_INTERVAL` | Node runtime |
+| `SECRET_KEY`, `SAVE_INTERVAL` | Node runtime |
 | `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | Node runtime เท่านั้น |
-| `VITE_API_BASE_URL` | build เว็บแอดมิน |
-| `USER_WEB_API_BASE_URL` | build เว็บผู้โดยสาร |
+| `GPS_*` | Node GPS worker |
+| `VITE_API_BASE_URL` | build ทั้งสองเว็บ |
+| `USER_WEB_API_BASE_URL` | optional override ของ API เว็บผู้โดยสารเฉพาะ Docker; ถ้าไม่กำหนดใช้ `VITE_API_BASE_URL` |
 | `VITE_GOOGLE_MAPS_API_KEY` | build ทั้งสองเว็บ |
 | `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | build ทั้งสองเว็บ |
 | `INSTALL_DETECTOR` | build Python/YOLO และกำหนด detector enabled |

@@ -4,7 +4,7 @@ const fleet = require('../config/gps-fleet.json');
 
 (async () => {
   if (!GPS.username || !GPS.password) {
-    console.error('GPS is not configured. Fill GPS_USERNAME and GPS_PASSWORD in backend-node/.env.gps.');
+    console.error('GPS is not configured. Fill GPS_USERNAME and GPS_PASSWORD in the root .env.');
     process.exitCode = 1;
     return;
   }

@@ -28,6 +28,17 @@
 - Supabase project สำหรับ Realtime ตำแหน่งรถ
 - Python 3 ถ้าต้องใช้ detector/YOLO
 
+## Environment Setup
+
+ทุกส่วนใช้ `.env` ที่ root ร่วมกัน ทั้ง Backend, GPS, Admin Web, Passenger Web และ Docker
+สำหรับเครื่องใหม่ คัดลอกแม่แบบครั้งเดียวจาก root (ไม่คัดลอกทับไฟล์ที่กรอกค่าแล้ว):
+
+```bash
+cp .env.example .env
+```
+
+กรอกค่าของทีมในไฟล์นี้ โดย `VITE_*` เป็นค่าที่เปิดเผยในเว็บ ส่วนรหัส GPS, `SECRET_KEY` และ `SUPABASE_SECRET_KEY` ใช้เฉพาะ Backend
+
 ## Backend Setup
 
 Backend ใช้ค่าจาก `backend-node/config.js` และ root `.env`
@@ -55,7 +66,7 @@ curl http://localhost:5101/health
 ถ้าต้องสร้างบัญชี Admin สำหรับฐานข้อมูลทดสอบ ให้เปิด Terminal ใหม่จาก root project แล้วรัน:
 
 ```bash
-node --env-file=.env backend-node/seed/seed_admin.js
+node backend-node/seed/seed_admin.js
 ```
 
 ค่าหลักของ Backend:
@@ -63,10 +74,11 @@ node --env-file=.env backend-node/seed/seed_admin.js
 - `MONGO_URI` - MongoDB URI ค่าเริ่มต้นคือ `mongodb://localhost:27017/`
 - `DB_NAME` - ชื่อ database ค่าเริ่มต้นคือ `shuttlebus_web_system`
 - `SECRET_KEY` - secret สำหรับ JWT
-- `CAMERA_URL` - URL กล้องสำหรับ detector
 - `SAVE_INTERVAL` - รอบเวลาบันทึกข้อมูล detector
 - `SUPABASE_URL` - Project URL ของ Supabase
 - `SUPABASE_SECRET_KEY` - Secret key สำหรับส่งข้อมูลจาก Backend เท่านั้น
+
+URL กล้องของ detector ตั้งค่าแยกตามสถานีผ่าน Admin Web และเก็บใน `stations.cameraUrl`
 
 ## Admin Web
 
@@ -75,7 +87,6 @@ node --env-file=.env backend-node/seed/seed_admin.js
 ```bash
 cd admin-web
 npm install
-cp .env.example .env
 npm run dev
 ```
 
@@ -85,7 +96,7 @@ npm run dev
 http://localhost:5173
 ```
 
-ค่า env ที่ใช้ใน `admin-web/.env`:
+ค่า env สำหรับ Admin Web ใน root `.env`:
 
 ```env
 VITE_API_BASE_URL=http://localhost:5101
@@ -111,7 +122,6 @@ npm run preview
 ```bash
 cd frontend-vue
 npm install
-cp .env.example .env
 npm run dev
 ```
 
@@ -121,7 +131,7 @@ npm run dev
 http://localhost:5174
 ```
 
-ค่า env ที่ใช้ใน `frontend-vue/.env`:
+ค่า env สำหรับ Passenger Web ใน root `.env` (ใช้ร่วมกับ Admin Web):
 
 ```env
 VITE_API_BASE_URL=http://localhost:5101
@@ -145,7 +155,7 @@ npm run preview
 ข้อมูลรถยังเก็บใน MongoDB และ Node Backend เป็นผู้ดึง GPS แล้วส่งข้อมูลไป Supabase
 
 1. ใส่ `SUPABASE_URL` และ `SUPABASE_SECRET_KEY` ใน root `.env`
-2. ใส่ `VITE_SUPABASE_URL` และ `VITE_SUPABASE_PUBLISHABLE_KEY` ใน `.env` ของทั้งสองเว็บ
+2. ใส่ `VITE_SUPABASE_URL` และ `VITE_SUPABASE_PUBLISHABLE_KEY` ใน root `.env` เดียวกันสำหรับทั้งสองเว็บ
 3. เปิด `backend-node/sql/realtime.sql` แล้วนำไปรันใน Supabase SQL Editor ครั้งแรก
 4. รีสตาร์ต Backend และ Vite หลังแก้ `.env`
 
@@ -191,7 +201,7 @@ URL สำหรับเข้าใช้งาน:
 
 ## Docker Setup
 
-ตั้งค่า root `.env` และ `backend-node/.env.gps` ก่อน แล้วรันจาก root project:
+ตั้งค่า root `.env` ก่อน แล้วรันจาก root project:
 
 ```bash
 docker compose up -d --build
@@ -225,10 +235,10 @@ Backend แบ่ง route หลักตามนี้:
 - ควรรัน MongoDB และ Backend ก่อนเปิด Admin Web หรือ Passenger Web
 - ถ้าเปลี่ยนค่า `.env` ต้องหยุดแล้วรัน service นั้นใหม่
 - ถ้าใช้ Secret key ของ Supabase ให้เก็บไว้เฉพาะ Backend และห้าม commit ลง Git
-- ห้าม commit ไฟล์ local config ที่มี key จริง เช่น `.env`, `admin-web/.env` และ `frontend-vue/.env`
+- ห้าม commit root `.env` ที่มี key จริง ใช้ `.env.example` เป็นแม่แบบสำหรับทีม
 - Google Maps quota และ API key เป็นคนละส่วนกับ Supabase Realtime
 - ข้อมูลสถานี รายงาน feedback และ detector ยังคงโหลดผ่าน API เดิม
-- ถ้าใช้ GPS จริง ให้ตั้งค่า `backend-node/.env.gps` ตาม [docs/GPS.md](docs/GPS.md)
+- ถ้าใช้ GPS จริง ให้ตั้งค่า `GPS_*` ใน root `.env` ตาม [docs/GPS.md](docs/GPS.md)
 
 ## Documentation
 

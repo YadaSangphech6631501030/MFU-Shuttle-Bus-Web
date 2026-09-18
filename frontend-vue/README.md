@@ -9,11 +9,13 @@ Vue 3 + Vite สำหรับผู้ใช้งานระบบ MFU Shutt
 
 ## Environment
 
+ใช้ `.env` ที่ root ร่วมกับ Backend และ Admin Web จากโฟลเดอร์ `frontend-vue` คัดลอกแม่แบบเฉพาะเมื่อยังไม่มีไฟล์:
+
 ```bash
-cp .env.example .env
+cp ../.env.example ../.env
 ```
 
-ค่าเริ่มต้นใน `.env`
+ค่าเริ่มต้นใน root `.env` (Vite อ่านผ่าน `envDir`)
 
 ```env
 VITE_API_BASE_URL=http://localhost:5101

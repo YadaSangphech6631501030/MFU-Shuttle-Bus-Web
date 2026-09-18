@@ -1,7 +1,8 @@
 const path = require('node:path');
-const fs = require('node:fs');
-const gpsEnvPath = path.join(__dirname, '.env.gps');
-if (fs.existsSync(gpsEnvPath)) process.loadEnvFile(gpsEnvPath);
+
+// Shared by the API, seeds and diagnostic scripts, regardless of their cwd.
+// Environment supplied by the shell or Docker takes precedence.
+require('dotenv').config({ path: path.resolve(__dirname, '../.env'), quiet: true });
 
 function numberFromEnv(name, fallback) {
   const value = Number.parseInt(process.env[name] || "", 10);
@@ -26,6 +27,5 @@ module.exports = {
 
   SECRET_KEY: process.env.SECRET_KEY || "super_secret_key_123",
 
-  CAMERA_URL: process.env.CAMERA_URL || "http://192.168.110.234:4747/video",
   SAVE_INTERVAL: numberFromEnv("SAVE_INTERVAL", 5),
 };

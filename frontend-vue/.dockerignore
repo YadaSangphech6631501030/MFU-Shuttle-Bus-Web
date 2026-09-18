@@ -1,12 +1,7 @@
-.dart_tool
-build
-android/.gradle
-ios/Pods
-linux
-macos
-windows
+node_modules
+dist
 .DS_Store
 *.log
 .env
 .env.*
-devtools_options.yaml
+*.tsbuildinfo

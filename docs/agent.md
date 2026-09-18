@@ -13,7 +13,8 @@ Vue Passenger/Admin -> REST API -> MongoDB
 Admin CCTV -> Node detector service -> Python YOLO -> จำนวนคน/ภาพใน runtime
 ```
 
-Node เริ่มจาก `backend-node/app.js`: โหลด root `.env`, เชื่อม MongoDB และเริ่ม worker
+Node เริ่มจาก `backend-node/app.js`: โหลด root `.env` ผ่าน `config.js`, เชื่อม MongoDB และเริ่ม worker
+Seed และ diagnostic scripts โหลดค่าเดียวกันผ่าน `config.js`; Vite ทั้งสองเว็บอ่าน root `.env` ผ่าน `envDir` และเปิดเผยเฉพาะ `VITE_*`
 การเรียก API/การล็อกอินใช้ Express และ JWT เดิม Supabase ไม่ใช่ฐานข้อมูลหลักหรือระบบล็อกอินของแอป
 Docker มี `mongo`, `backend`, `admin-web`, `user-web`; ทั้งสองเว็บเป็น Vue/Vite
 

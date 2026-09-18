@@ -43,26 +43,23 @@ npm ci --prefix frontend-vue
 
 ## 3. เตรียมไฟล์ตั้งค่า
 
-ทำเฉพาะไฟล์ที่ยังไม่มีอยู่ ห้ามคัดลอกทับ `.env` ที่กรอกค่าแล้ว
+ทุกส่วนใช้ root `.env` ไฟล์เดียว ทำเฉพาะเมื่อยังไม่มีไฟล์ ห้ามคัดลอกทับ `.env` ที่กรอกค่าแล้ว
 คำสั่งนี้ใช้กับ macOS/Linux; บน Windows คัดลอกไฟล์ผ่าน VS Code ได้:
 
 ```bash
 cp .env.example .env
-cp backend-node/.env.gps.example backend-node/.env.gps
-cp admin-web/.env.example admin-web/.env
-cp frontend-vue/.env.example frontend-vue/.env
 ```
 
-| ไฟล์ | ค่าที่เพื่อนต้องกรอก | โปรแกรมที่อ่าน |
+| ส่วนใน root `.env` | ค่าที่เพื่อนต้องกรอก | โปรแกรมที่อ่าน |
 |---|---|---|
-| `.env` ที่ root | `MONGO_URI` ถ้าไม่ได้ใช้ local, `DB_NAME`, `SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | `backend-node/app.js` |
-| `backend-node/.env.gps` | บัญชี GPS หรือ `GPS_ENABLED=false` สำหรับทำ UI โดยไม่ดึง GPS | `backend-node/config.js` |
-| `admin-web/.env` | `VITE_API_BASE_URL`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Vite ฝั่งแอดมิน |
-| `frontend-vue/.env` | ตัวแปร `VITE_*` ชุดเดียวกับแอดมิน | Vite ฝั่งผู้โดยสาร |
+| Backend / MongoDB / Supabase | `MONGO_URI` ถ้าไม่ได้ใช้ local, `DB_NAME`, `SECRET_KEY`, `SUPABASE_URL`, `SUPABASE_SECRET_KEY` | `backend-node/config.js` ผ่าน API, seed และ scripts |
+| GPS | บัญชี `GPS_USERNAME`, `GPS_PASSWORD` หรือ `GPS_ENABLED=false` สำหรับทำ UI โดยไม่ดึง GPS | `backend-node/config.js` |
+| Browser | `VITE_API_BASE_URL`, `VITE_GOOGLE_MAPS_API_KEY`, `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY` | Vite ของทั้งสองเว็บ |
 
 `SECRET_KEY` คือคีย์ JWT ของระบบเดิม ส่วน `SUPABASE_SECRET_KEY` คือคีย์หลังบ้านที่คัดลอกจาก Supabase API Keys เป็นคนละค่า
 ใช้ URL/keys จาก Supabase โปรเจกต์เดียวกันทุกส่วน อย่าใส่ Secret key ในตัวแปร `VITE_*`
-เมื่อรัน local ค่า `VITE_*` ใน root `.env` ไม่ได้ถูกโหลดเข้าเว็บสองโฟลเดอร์โดยอัตโนมัติ
+Vite ของทั้งสองเว็บอ่าน root `.env` ผ่าน `envDir` และเปิดเผยเฉพาะตัวแปร `VITE_*` ให้ browser
+Docker อ่านไฟล์เดียวกัน โดยส่งค่า Backend ตอนรันและค่าเว็บตอน build
 
 หากทีมตั้ง Supabase แล้ว ไม่ต้องสร้างโปรเจกต์ใหม่ ทำตาม [คู่มือ Realtime](REALTIME.md) เพื่อยืนยันสิทธิ์และการเชื่อมต่อ
 หากใช้ backend กลางร่วมกัน ให้ชี้ `VITE_API_BASE_URL` ไปที่ backend นั้น และไม่ต้องเปิด Node/GPS worker ซ้ำบนเครื่องตนเอง
@@ -112,10 +109,10 @@ health สำเร็จไม่ได้ยืนยันว่า GPS, ก�
 ถ้าจำเป็นต้องสร้างบัญชี admin บนฐานทดสอบใหม่ ให้กำหนด `ADMIN_USERNAME`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` ใน root `.env` ชั่วคราว แล้วรัน:
 
 ```bash
-node --env-file=.env backend-node/seed/seed_admin.js
+node backend-node/seed/seed_admin.js
 ```
 
-คำสั่งนี้ใช้ Node โหลด root `.env` ให้ seed เพราะ seed ไม่ได้ผ่าน `app.js` และจะอัปเดตบัญชีเดิมหากใช้ชื่อซ้ำ
+Seed โหลด root `.env` ผ่าน `config.js` โดยอัตโนมัติ และจะอัปเดตบัญชีเดิมหากใช้ชื่อซ้ำ
 ลบค่ารหัสผ่าน seed ออกจากไฟล์หลังใช้งาน ไม่ใช้รหัสผ่าน demo กับระบบจริง
 
 ## 6. ทดสอบก่อนส่งต่อ
