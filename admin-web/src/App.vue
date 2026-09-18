@@ -748,6 +748,8 @@ const isEditingRoi = ref(false);
 const roiDragStart = ref<[number, number] | null>(null);
 const detectorFrameUrl = ref('');
 let detectorFrameTimer: number | undefined;
+let detectorFrameRequest: AbortController | undefined;
+let detectorFrameGeneration = 0;
 let detectorStatusTimer: number | undefined;
 let crowdRefreshTimer: number | undefined;
 let reportRefreshTimer: number | undefined;
@@ -1126,6 +1128,8 @@ function syncRoiDraftFromStation() {
 }
 
 function revokeDetectorFrameUrl() {
+  detectorFrameGeneration += 1;
+  detectorFrameRequest?.abort();
   if (detectorFrameUrl.value) {
     URL.revokeObjectURL(detectorFrameUrl.value);
     detectorFrameUrl.value = '';
@@ -1137,26 +1141,39 @@ async function loadDetectorStatus() {
   if (!station) return;
 
   try {
-    detectorStatus.value = await api.getDetectorStatus(station.id);
+    const status = await api.getDetectorStatus(station.id);
+    if (selectedCameraStation.value?.id === station.id) detectorStatus.value = status;
   } catch {
-    detectorStatus.value = null;
+    // A temporary status request failure does not mean the detector stopped.
   }
 }
 
 async function refreshDetectorFrame() {
+  if (activeTab.value !== 'cctv' || document.hidden || !isLoggedIn.value) return;
   const station = selectedCameraStation.value;
   if (!station || !detectorStatus.value?.running) {
     revokeDetectorFrameUrl();
     return;
   }
 
+  if (detectorFrameRequest) return;
+  const controller = new AbortController();
+  detectorFrameRequest = controller;
+  const generation = detectorFrameGeneration;
+  const timeout = window.setTimeout(() => controller.abort(), 4000);
   try {
-    const frame = await api.getDetectorFrame(station.id);
+    const frame = await api.getDetectorFrame(station.id, controller.signal);
+    if (controller.signal.aborted || generation !== detectorFrameGeneration
+      || selectedCameraStation.value?.id !== station.id || !detectorStatus.value?.running) return;
     const nextUrl = URL.createObjectURL(frame);
-    revokeDetectorFrameUrl();
+    const previousUrl = detectorFrameUrl.value;
     detectorFrameUrl.value = nextUrl;
+    if (previousUrl) URL.revokeObjectURL(previousUrl);
   } catch {
-    revokeDetectorFrameUrl();
+    // Keep the last successful image through brief network interruptions.
+  } finally {
+    window.clearTimeout(timeout);
+    detectorFrameRequest = undefined;
   }
 }
 
@@ -1707,7 +1724,7 @@ onMounted(() => {
 
   detectorFrameTimer = window.setInterval(() => {
     void refreshDetectorFrame();
-  }, 5000);
+  }, 500);
 
   crowdRefreshTimer = window.setInterval(() => {
     if (activeTab.value === 'dashboard' && isLoggedIn.value && !loading.value) {

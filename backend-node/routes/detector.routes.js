@@ -65,15 +65,25 @@ router.post("/detector/:stationId/stop", tokenRequired, adminOnly, (req, res) =>
   res.json(stopDetector(req.params.stationId));
 });
 
-router.get("/detector/:stationId/frame", tokenRequired, adminOnly, (req, res) => {
+router.get("/detector/:stationId/frame", tokenRequired, adminOnly, async (req, res, next) => {
   const framePath = getFramePath(req.params.stationId);
 
-  if (!fs.existsSync(framePath)) {
-    return res.status(404).json({ error: "Frame not ready" });
+  try {
+    // Close the file before sending to a slow client so Windows can replace it.
+    const frame = await fs.promises.readFile(framePath);
+    if (res.destroyed) return;
+    res.setHeader("Cache-Control", "no-store");
+    res.type("image/jpeg").send(frame);
+  } catch (err) {
+    if (res.destroyed) return;
+    if (err.code === "ENOENT") {
+      return res.status(404).json({ error: "Frame not ready" });
+    }
+    if (err.code === "EBUSY" || err.code === "EACCES" || err.code === "EPERM") {
+      return res.status(503).json({ error: "Frame temporarily unavailable" });
+    }
+    next(err);
   }
-
-  res.setHeader("Cache-Control", "no-store");
-  res.sendFile(framePath);
 });
 
 router.get("/detector/:stationId/stream", streamTokenRequired, adminOnly, (req, res) => {

@@ -209,9 +209,11 @@ export const api = {
     });
   },
 
-  getDetectorFrame(stationId: string) {
+  getDetectorFrame(stationId: string, signal?: AbortSignal) {
     return requestBlob(`/api/detector/${encodeURIComponent(stationId)}/frame`, {
       auth: true,
+      signal,
+      cache: 'no-store',
     });
   },
 
