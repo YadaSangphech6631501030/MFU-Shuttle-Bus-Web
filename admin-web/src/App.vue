@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { crowdLevel, crowdColor } from './services/crowd';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { api } from './services/api';
 import { supabase } from './services/supabase';
@@ -10,14 +11,15 @@ import StationCCTVPage from './page/StationCCTV.vue';
 import StationsPage from './page/Stations.vue';
 import RoutesPage from './page/Routes.vue';
 import UsersPage from './page/Users.vue';
+import SettingsPage from './page/Settings.vue';
 import type { AdminUserPayload, Bus, GpsStatus, CrowdThresholds, DetectorStatus, Report, Station, User, ShuttleRoute } from './types';
 import mfuLogoUrl from './assets/mfu_logo.png';
 
 type Lang = 'en' | 'th';
-type TabKey = 'dashboard' | 'stations' | 'routes' | 'cctv' | 'buses' | 'reports' | 'users';
+type TabKey = 'dashboard' | 'stations' | 'routes' | 'cctv' | 'buses' | 'reports' | 'users' | 'settings';
 type LatLng = { lat: number; lng: number };
 type CameraPreviewKind = 'none' | 'rtsp' | 'image' | 'video' | 'link';
-type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH';
+type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
 type NavIcon = {
   paths?: string[];
   circles?: Array<{ cx: number; cy: number; r: number }>;
@@ -110,8 +112,9 @@ const ADMIN_MAP_OPTIONS = {
 let googleMapsPromise: Promise<void> | null = null;
 
 const DEFAULT_CROWD_THRESHOLDS: CrowdThresholds = {
-  medium: 6,
-  high: 10,
+  low: { min: 0, max: 5 },
+  medium: { min: 6, max: 9 },
+  high: { min: 10, max: null },
 };
 
 const lang = ref<Lang>(savedLanguage === 'th' ? 'th' : 'en');
@@ -123,6 +126,7 @@ const tabs: Array<{ key: TabKey }> = [
   { key: 'buses' },
   { key: 'reports' },
   { key: 'users' },
+  { key: 'settings' },
 ];
 const tabIcons: Record<TabKey, NavIcon> = {
   routes: { paths: ['M5 5h10a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h10'], circles: [{ cx: 5, cy: 5, r: 2 }, { cx: 19, cy: 21, r: 2 }] },
@@ -171,6 +175,10 @@ const tabIcons: Record<TabKey, NavIcon> = {
       'M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8',
     ],
   },
+  settings: {
+    paths: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7', 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H7V11h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L10 6.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1 1.5V5h2.5v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v2.5h-.1a1.7 1.7 0 0 0-1.5 1.5Z'],
+    circles: [{ cx: 12, cy: 12, r: 2.4 }],
+  },
 };
 const sidebarTabs = computed(() => tabs.filter((tab) => tab.key !== 'users'));
 const ACTIVE_TAB_KEY = 'mfu_web_admin_active_tab';
@@ -204,6 +212,7 @@ const dictionary = {
       buses: 'Buses',
       reports: 'Feedback',
       users: 'Users',
+      settings: 'Settings',
     },
     language: 'EN',
     stationId: 'Station ID',
@@ -238,6 +247,12 @@ const dictionary = {
     backToLogin: 'Back to sign in',
     logout: 'Log out',
     profileInformation: 'Profile Information',
+    settingsTitle: 'Crowd status settings',
+    settingsHint: 'Set how many people define each station crowd level.',
+    lowThresholdHint: '0 up to below Medium',
+    mediumThresholdHint: 'Medium starts at this number',
+    highThresholdHint: 'High starts at this number',
+    thresholdValidation: 'High must be greater than Medium, and both values must be at least 1.',
     signedInUser: 'Admin user',
     refresh: 'Refresh data',
     loading: 'Loading...',
@@ -408,6 +423,7 @@ const dictionary = {
       buses: 'รถทั้งหมด',
       reports: 'ข้อเสนอแนะ',
       users: 'ผู้ใช้',
+      settings: 'ตั้งค่า',
     },
     language: 'TH',
     stationId: 'รหัสสถานี',
@@ -442,6 +458,12 @@ const dictionary = {
     backToLogin: 'กลับไปเข้าสู่ระบบ',
     logout: 'ออกจากระบบ',
     profileInformation: 'ข้อมูลโปรไฟล์',
+    settingsTitle: 'ตั้งค่าสถานะความหนาแน่นสถานี',
+    settingsHint: 'กำหนดจำนวนคนที่ใช้แบ่งระดับความหนาแน่นของแต่ละสถานี',
+    lowThresholdHint: 'ตั้งแต่ 0 คนจนถึงก่อนระดับ Medium',
+    mediumThresholdHint: 'เริ่มเป็น Medium เมื่อมีคนถึงจำนวนนี้',
+    highThresholdHint: 'เริ่มเป็น High เมื่อมีคนถึงจำนวนนี้',
+    thresholdValidation: 'ค่า High ต้องมากกว่า Medium และทั้งสองค่าต้องไม่น้อยกว่า 1',
     signedInUser: 'ผู้ดูแลระบบ',
     refresh: 'โหลดข้อมูลล่าสุด',
     loading: 'กำลังโหลด...',
@@ -654,7 +676,7 @@ onUnmounted(() => {
   mobileQuery.removeEventListener('change', syncMobileViewport);
   if (mobileMenuOpen.value) document.body.style.overflow = originalBodyOverflow;
 });
-const crowdThresholds = ref<CrowdThresholds>(DEFAULT_CROWD_THRESHOLDS);
+const crowdThresholds = ref<CrowdThresholds>({ ...DEFAULT_CROWD_THRESHOLDS });
 const isAlertMenuOpen = ref(false);
 const dismissedCrowdAlertKeys = ref<Set<string>>(new Set());
 const isUserMenuOpen = ref(false);
@@ -795,7 +817,7 @@ const activeCrowdAlertStations = computed(() => stations.value
   }))
   .filter((item) => item.level === 'HIGH' || item.level === 'MEDIUM')
   .sort((a, b) => {
-    const severity = { HIGH: 2, MEDIUM: 1, LOW: 0 };
+    const severity = { HIGH: 2, MEDIUM: 1, LOW: 0, UNKNOWN: -1 };
     return severity[b.level] - severity[a.level] || b.waiting - a.waiting;
   }));
 const crowdAlertStations = computed(() => activeCrowdAlertStations.value
@@ -819,15 +841,14 @@ function stationWaiting(station: Station) {
 function stationDensityLevel(station: Station): DensityLevel {
   const waiting = stationWaiting(station);
 
-  if (waiting >= crowdThresholds.value.high) return 'HIGH';
-  if (waiting >= crowdThresholds.value.medium) return 'MEDIUM';
-  return 'LOW';
+  return crowdLevel(waiting, crowdThresholds.value);
 }
 
 function stationDensityLabel(station: Station) {
   const level = stationDensityLevel(station);
   if (level === 'HIGH') return text.value.high;
   if (level === 'MEDIUM') return text.value.medium;
+  if (level === 'UNKNOWN') return lang.value === 'th' ? 'นอกช่วงที่กำหนด' : 'Outside ranges';
   return text.value.low;
 }
 
@@ -855,9 +876,7 @@ function stationPosition(station: Station): LatLng {
 }
 
 function crowdMarkerColor(level: DensityLevel) {
-  if (level === 'HIGH') return '#dc3545';
-  if (level === 'MEDIUM') return '#c77f28';
-  return '#2eb85c';
+  return crowdColor(level, crowdThresholds.value);
 }
 
 function clearCrowdMarkers() {
@@ -1503,11 +1522,12 @@ async function withLoading(task: () => Promise<void>) {
 
 async function loadData() {
   await withLoading(async () => {
-    const [stationData, reportData, userData, routeData] = await Promise.all([
+    const [stationData, reportData, userData, routeData, thresholdData] = await Promise.all([
       api.getStations(),
       api.getReports(),
       api.getUsers(),
       api.getRoutes(),
+      api.getCrowdThresholds(),
     ]);
 
     stations.value = stationData;
@@ -1515,7 +1535,25 @@ async function loadData() {
     syncSelectedCameraStation(stationData);
     reports.value = reportData;
     users.value = userData;
+    crowdThresholds.value = thresholdData;
   });
+}
+
+const settingsSavedVersion = ref(0);
+// Only a settings save locks this form; unrelated dashboard requests should not block edits.
+const settingsSaving = ref(false);
+
+async function saveCrowdThresholds(thresholds: CrowdThresholds) {
+  if (settingsSaving.value) return;
+  settingsSaving.value = true;
+  try {
+    await withLoading(async () => {
+      crowdThresholds.value = await api.updateCrowdThresholds(thresholds);
+      settingsSavedVersion.value += 1;
+    });
+  } finally {
+    settingsSaving.value = false;
+  }
 }
 
 function syncBusFeed() {
@@ -1781,7 +1819,7 @@ watch(
   },
 );
 
-watch(stations, () => {
+watch([stations, crowdThresholds], () => {
   if (activeTab.value === 'dashboard') {
     renderCrowdMarkers();
   }
@@ -1964,7 +2002,7 @@ watch(selectedCameraStationId, () => {
                   type="button"
                   @click="openCrowdAlertStation(item.station, item.level)"
                 >
-                  <span class="notification-dot" aria-hidden="true"></span>
+                  <span class="notification-dot" :style="{ backgroundColor: crowdMarkerColor(item.level) }" aria-hidden="true"></span>
                   <div>
                     <strong>{{ item.station.name }}</strong>
                     <p>
@@ -2113,6 +2151,15 @@ watch(selectedCameraStationId, () => {
         @delete-user="deleteUser"
         @toggle-role-menu="toggleRoleMenu"
         @update-user-role="updateUserRole"
+      />
+
+      <SettingsPage
+        v-if="activeTab === 'settings'"
+        :loading="settingsSaving"
+        :thresholds="crowdThresholds"
+        :saved-version="settingsSavedVersion"
+        :text="text"
+        @save="saveCrowdThresholds"
       />
     </section>
   </div>

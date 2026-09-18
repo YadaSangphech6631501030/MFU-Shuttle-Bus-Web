@@ -26,6 +26,7 @@ app.use("/auth", authRoutes);
 app.use("/station", stationRoutes);
 app.use("/api", busRoutes);
 app.use("/api", require('./routes/route.routes'));
+app.use("/api", require('./routes/settings'));
 app.use("/api", reportRoutes);
 app.use("/api", detectorRoutes);
 

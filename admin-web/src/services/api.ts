@@ -1,4 +1,5 @@
-import type { AdminUserPayload, Bus, GpsStatus, DetectorStatus, LoginResponse, Report, Station, User, ShuttleRoute } from '../types';
+import { normalizeCrowdRanges } from './crowd';
+import type { AdminUserPayload, Bus, CrowdThresholds, GpsStatus, DetectorStatus, LoginResponse, Report, Station, User, ShuttleRoute } from '../types';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5101';
 const TOKEN_KEY = 'mfu_admin_token';
@@ -107,6 +108,16 @@ export const api = {
 
   getStations() {
     return request<Station[]>('/station/admin/all', { auth: true });
+  },
+
+  getCrowdThresholds() {
+    return request<unknown>('/api/settings/crowd-thresholds', { auth: true, signal: AbortSignal.timeout(10000) }).then(normalizeCrowdRanges);
+  },
+
+  updateCrowdThresholds(thresholds: CrowdThresholds) {
+    return request<CrowdThresholds>('/api/settings/crowd-thresholds', {
+      method: 'PUT', auth: true, body: JSON.stringify(thresholds), signal: AbortSignal.timeout(10000),
+    });
   },
 
   createStation(station: Station) {

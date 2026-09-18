@@ -1,4 +1,5 @@
 export type Station = {
+  statusColor?: string;
   id: string;
   name: string;
   nameTH?: string;
@@ -6,7 +7,7 @@ export type Station = {
   lng: number;
   lines?: string[];
   waiting?: number;
-  status?: 'LOW' | 'MEDIUM' | 'HIGH';
+  status?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
 };
 
 export type ShuttleRoute = {

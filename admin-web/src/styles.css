@@ -3315,6 +3315,8 @@ th {
   background: #dc3545;
 }
 
+.level-unknown .load-dot { background: #64748b; }
+
 .guide-dot.low {
   background: var(--success);
 }

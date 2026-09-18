@@ -826,12 +826,25 @@ function minuteText(value: number | null) {
  }
 
 function stationStatusLabel(status = 'LOW') {
+  if (status === 'UNKNOWN') return lang.value === 'th' ? 'นอกช่วงที่กำหนด' : 'Outside ranges';
   if (status.toUpperCase() === 'HIGH') return lang.value === 'th' ? 'หนาแน่น' : 'HIGH';
   if (status.toUpperCase() === 'MEDIUM') return lang.value === 'th' ? 'ปานกลาง' : 'MEDIUM';
   return lang.value === 'th' ? 'ปกติ' : 'LOW';
 }
 
+function stationColorStyle(station: Station) {
+  const color = station.statusColor;
+  // This style is inserted into popup HTML: accept only six-digit HEX from the API.
+  if (!color || !/^#[0-9a-f]{6}$/i.test(color)) return '';
+  const rgb = [1, 3, 5].map(start => parseInt(color.slice(start, start + 2), 16) / 255);
+  // Relative luminance chooses the higher-contrast black or white label for any chosen color.
+  const linear = rgb.map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+  const luminance = 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2];
+  return `background:${color};color:${luminance > 0.179 ? '#000000' : '#ffffff'} !important`;
+}
+
 function stationStatusClass(status = 'LOW') {
+  if (status === 'UNKNOWN') return 'unknown';
   if (status.toUpperCase() === 'HIGH') return 'high';
   if (status.toUpperCase() === 'MEDIUM') return 'medium';
   return 'low';
@@ -851,7 +864,7 @@ const popupIcons = {
 function stationPopupHtml(station: Station) {
   const statusClass = stationStatusClass(station.status);
   const isFavorite = favoriteIds.value.includes(station.id);
-  return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${stationArrivalText(station)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}">${stationStatusLabel(station.status)}</b></div></div>`;
+  return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${stationArrivalText(station)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}" style="${stationColorStyle(station)}">${stationStatusLabel(station.status)}</b></div></div>`;
 }
 
 function bindStationPopupActions(element: HTMLElement, station: Station) {
@@ -1127,8 +1140,9 @@ function syncRouteControls(routeList: ShuttleRoute[] | null) {
 }
 
 function publicDataSignature(nextStations: Station[], nextRoutes: ShuttleRoute[]) {
+  // Include statusColor so a color-only settings update also refreshes station popups.
   return JSON.stringify({
-    stations: nextStations.map(({ id, name, nameTH, lat, lng, lines, waiting, status }) => ({ id, name, nameTH, lat, lng, lines, waiting, status })),
+    stations: nextStations.map(({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor }) => ({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor })),
     routes: nextRoutes.map(({ id, name, nameTH, color, enabled, geometry, revision, updatedAt }) => ({ id, name, nameTH, color, enabled, geometry, revision, updatedAt })),
   });
 }
