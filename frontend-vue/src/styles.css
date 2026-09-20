@@ -112,7 +112,8 @@ input::placeholder, textarea::placeholder { color: #8c8c8c; opacity: 1; }
 .trip-estimate-row.total > b { color: var(--mfu-red); }
 .trip-estimate-unavailable { margin: 8px 0 2px; color: #777; font-size: 12px; line-height: 1.4; }
 .trip-estimate-unavailable p { margin: 6px 0; overflow-wrap: anywhere; }
-.boarding-suggestion { margin-top: 12px; padding-top: 10px; border-top: 1px solid #ededed; color: var(--ink); }
+/* The summary header supplies the divider; avoid a second line and extra gap here. */
+.boarding-suggestion { margin-top: 0; padding-top: 0; color: var(--ink); }
 .boarding-suggestion > strong { color: var(--mfu-red); }
 .boarding-suggestion .boarding-stop { font-size: 14px; font-weight: 700; }
 .boarding-suggestion small { display: block; color: #777; line-height: 1.5; }
