@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import { crowdLevel, crowdColor } from '../services/crowd';
+import { crowdLevel, crowdColor, crowdLabel, crowdSeverity, crowdStatuses } from '../services/crowd';
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import type { CrowdThresholds, Station } from '../types';
 
-type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+type DensityLevel = string;
 
 const props = defineProps<{
   lang: 'th' | 'en';
@@ -36,14 +36,10 @@ function densityLevel(station: Station): DensityLevel {
 }
 
 function densityLabel(level: DensityLevel) {
-  if (level === 'HIGH') return props.text.high;
-  if (level === 'MEDIUM') return props.text.medium;
-  if (level === 'UNKNOWN') return props.lang === 'th' ? 'นอกช่วงที่กำหนด' : 'Outside ranges';
-  return props.text.low;
+  return crowdLabel(level, props.crowdThresholds, props.text);
 }
-
 function densityAdvice(level: DensityLevel) {
-  if (level === 'HIGH') return props.text.highAdvice;
+  if (crowdSeverity(level, props.crowdThresholds) >= 2) return props.text.highAdvice;
   if (level === 'MEDIUM') return props.text.mediumAdvice;
   return props.text.lowAdvice;
 }
@@ -174,9 +170,7 @@ onUnmounted(() => {
         <article class="dashboard-chart-panel crowd-guide-panel">
           <h2>{{ text.dispatchGuide }}</h2>
           <div class="crowd-guide-list">
-            <p><span class="guide-dot high" :style="{ backgroundColor: crowdColor('high', crowdThresholds) }"></span><strong>{{ text.high }}</strong> {{ densityAdvice('HIGH') }}</p>
-            <p><span class="guide-dot medium" :style="{ backgroundColor: crowdColor('medium', crowdThresholds) }"></span><strong>{{ text.medium }}</strong> {{ densityAdvice('MEDIUM') }}</p>
-            <p><span class="guide-dot low" :style="{ backgroundColor: crowdColor('low', crowdThresholds) }"></span><strong>{{ text.low }}</strong> {{ densityAdvice('LOW') }}</p>
+            <p v-for="status in crowdStatuses(crowdThresholds).slice().reverse()" :key="status.id"><span class="guide-dot" :style="{ backgroundColor: status.color }"></span><strong>{{ densityLabel(status.id) }}</strong> {{ densityAdvice(status.id) }}</p>
           </div>
         </article>
       </aside>

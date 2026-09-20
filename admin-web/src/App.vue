@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { crowdLevel, crowdColor } from './services/crowd';
+import { crowdLevel, crowdColor, crowdLabel, crowdSeverity } from './services/crowd';
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue';
 import { api } from './services/api';
 import { supabase } from './services/supabase';
@@ -19,7 +19,7 @@ type Lang = 'en' | 'th';
 type TabKey = 'dashboard' | 'stations' | 'routes' | 'cctv' | 'buses' | 'reports' | 'users' | 'settings';
 type LatLng = { lat: number; lng: number };
 type CameraPreviewKind = 'none' | 'rtsp' | 'image' | 'video' | 'link';
-type DensityLevel = 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+type DensityLevel = string;
 type NavIcon = {
   paths?: string[];
   circles?: Array<{ cx: number; cy: number; r: number }>;
@@ -176,8 +176,8 @@ const tabIcons: Record<TabKey, NavIcon> = {
     ],
   },
   settings: {
-    paths: ['M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7', 'M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1-1.8 1.8-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V20h-2.5v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.9.3l-.1.1-1.8-1.8.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H7V11h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1L10 6.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1 1.5V5h2.5v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.9-.3l.1-.1 1.8 1.8-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.5 1h.1v2.5h-.1a1.7 1.7 0 0 0-1.5 1.5Z'],
-    circles: [{ cx: 12, cy: 12, r: 2.4 }],
+    paths: ['M4 7h2M12 7h8M4 17h8M18 17h2'],
+    circles: [{ cx: 9, cy: 7, r: 3 }, { cx: 15, cy: 17, r: 3 }],
   },
 };
 const sidebarTabs = computed(() => tabs.filter((tab) => tab.key !== 'users'));
@@ -815,10 +815,9 @@ const activeCrowdAlertStations = computed(() => stations.value
     waiting: stationWaiting(station),
     level: stationDensityLevel(station),
   }))
-  .filter((item) => item.level === 'HIGH' || item.level === 'MEDIUM')
+  .filter((item) => crowdSeverity(item.level, crowdThresholds.value) >= 1)
   .sort((a, b) => {
-    const severity = { HIGH: 2, MEDIUM: 1, LOW: 0, UNKNOWN: -1 };
-    return severity[b.level] - severity[a.level] || b.waiting - a.waiting;
+    return crowdSeverity(b.level, crowdThresholds.value) - crowdSeverity(a.level, crowdThresholds.value) || b.waiting - a.waiting;
   }));
 const crowdAlertStations = computed(() => activeCrowdAlertStations.value
   .filter((item) => !dismissedCrowdAlertKeys.value.has(crowdAlertKey(item.station, item.level))));
@@ -846,10 +845,7 @@ function stationDensityLevel(station: Station): DensityLevel {
 
 function stationDensityLabel(station: Station) {
   const level = stationDensityLevel(station);
-  if (level === 'HIGH') return text.value.high;
-  if (level === 'MEDIUM') return text.value.medium;
-  if (level === 'UNKNOWN') return lang.value === 'th' ? 'นอกช่วงที่กำหนด' : 'Outside ranges';
-  return text.value.low;
+  return crowdLabel(level, crowdThresholds.value, text.value);
 }
 
 function crowdAlertKey(station: Station, level: DensityLevel) {
@@ -959,13 +955,13 @@ function renderCrowdMarkers() {
         },
         icon: {
           path: maps.SymbolPath.CIRCLE,
-          scale: level === 'HIGH' ? 18 : level === 'MEDIUM' ? 15 : 12,
+          scale: crowdSeverity(level, crowdThresholds.value) >= 2 ? 18 : level === 'MEDIUM' ? 15 : 12,
           fillColor: crowdMarkerColor(level),
           fillOpacity: 0.94,
           strokeColor: '#ffffff',
           strokeWeight: 3,
         },
-        zIndex: level === 'HIGH' ? 30 : level === 'MEDIUM' ? 20 : 10,
+        zIndex: crowdSeverity(level, crowdThresholds.value) >= 2 ? 30 : level === 'MEDIUM' ? 20 : 10,
       });
 
       marker.addListener('click', () => {
