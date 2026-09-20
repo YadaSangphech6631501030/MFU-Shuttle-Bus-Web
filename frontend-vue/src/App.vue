@@ -458,10 +458,19 @@ function updateBusTurn(entry: BusMarkerEntry, bus: Bus, position: RoutePoint) {
 }
 
 function closeBusPopup() {
+  // Clear the selected key as well as the overlay so the same bus can reopen on click.
   if (busOverlay) busOverlay.setMap(null);
   busOverlay = null;
   busOverlayKey = '';
   busOverlayPosition = null;
+}
+
+function dismissBusPopupOutsideMap(event: MouseEvent) {
+  if (!busOverlay || !(event.target instanceof Node)) return;
+  // Google Maps handles map/marker clicks separately. Do not close a popup on
+  // the same click that opens it; this handler covers controls outside the map.
+  if (mapElement.value?.contains(event.target) || busOverlay.element?.contains(event.target)) return;
+  closeBusPopup();
 }
 
 function nearestBusLine(bus: Bus, position: RoutePoint) {
@@ -501,13 +510,13 @@ function busStationSummary(bus: Bus, position: RoutePoint) {
 }
 
 function busPopupHtml(bus: Bus, position: RoutePoint) {
+  // Show the bus number and stations; GPS age remains part of freshness logic only.
+  // Bold the station labels through ':' while keeping escaped station names regular.
   const busNumber = bus.busNumber || bus.busId?.replace(/^MFU/i, '') || '-';
   const summary = busStationSummary(bus, position);
-  const ageSeconds = Math.max(0, Math.floor(gpsAgeMs(bus, gpsNow.value) / 1000));
-  const ageLabel = lang.value === 'th' ? `พิกัดล่าสุด ${ageSeconds} วินาทีที่แล้ว` : `Last GPS position ${ageSeconds}s ago`;
   const currentLabel = summary ? escapeHtml(stationName(summary.current)) : '-';
   const nextLabel = summary ? escapeHtml(stationName(summary.next)) : '-';
-  return `<div class="bus-map-popup"><small>${ageLabel}</small><div class="bus-map-popup-number">${lang.value === 'th' ? 'หมายเลขรถ' : 'Bus number'}: <strong>${escapeHtml(busNumber)}</strong></div><div class="bus-map-popup-route"><div>${lang.value === 'th' ? 'สถานีปัจจุบัน' : 'Current station'}: ${currentLabel}</div><div>${lang.value === 'th' ? 'สถานีถัดไป' : 'Next station'}: ${nextLabel}</div></div></div>`;
+  return `<div class="bus-map-popup"><div class="bus-map-popup-number">${lang.value === 'th' ? 'หมายเลขรถ' : 'Bus number'}: <strong>${escapeHtml(busNumber)}</strong></div><div class="bus-map-popup-route"><div><strong>${lang.value === 'th' ? 'สถานีปัจจุบัน' : 'Current station'}:</strong> ${currentLabel}</div><div><strong>${lang.value === 'th' ? 'สถานีถัดไป' : 'Next station'}:</strong> ${nextLabel}</div></div></div>`;
 }
 
 function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
@@ -519,11 +528,15 @@ function toggleBusPopup(bus: Bus, position: { lat: number; lng: number }) {
 
 
   closeBusPopup();
+  closeStationPopup();
+  closeUserLocationPopup();
   busOverlayPosition = position;
   const overlay = new window.google.maps.OverlayView();
   overlay.onAdd = () => {
     const element = document.createElement('div');
     element.className = 'bus-map-popup-host';
+    // Clicking the popup itself must not trigger the map's dismiss handler.
+    element.addEventListener('click', event => event.stopPropagation());
     element.innerHTML = busPopupHtml(bus, position);
     overlay.element = element;
     overlay.getPanes().floatPane.appendChild(element);
@@ -672,6 +685,7 @@ function closeUserLocationPopup() {
 }
 
 function toggleUserLocationPopup() {
+  closeBusPopup();
   if (!userLocation.value || !campusMap || !window.google?.maps) return;
   if (userLocationOverlay) {
     closeUserLocationPopup();
@@ -825,7 +839,10 @@ function minuteText(value: number | null) {
   return lang.value === 'th' ? `${value} นาที` : `${value} min`;
  }
 
-function stationStatusLabel(status = 'LOW') {
+function stationStatusLabel(status = 'LOW', customLabel?: string) {
+  // Prefer the server-provided label so custom statuses remain readable to users.
+  if (customLabel) return customLabel;
+  if (status.startsWith('custom_')) return status;
   if (status === 'UNKNOWN') return lang.value === 'th' ? 'นอกช่วงที่กำหนด' : 'Outside ranges';
   if (status.toUpperCase() === 'HIGH') return lang.value === 'th' ? 'หนาแน่น' : 'HIGH';
   if (status.toUpperCase() === 'MEDIUM') return lang.value === 'th' ? 'ปานกลาง' : 'MEDIUM';
@@ -844,6 +861,7 @@ function stationColorStyle(station: Station) {
 }
 
 function stationStatusClass(status = 'LOW') {
+  if (status.startsWith('custom_')) return 'custom';
   if (status === 'UNKNOWN') return 'unknown';
   if (status.toUpperCase() === 'HIGH') return 'high';
   if (status.toUpperCase() === 'MEDIUM') return 'medium';
@@ -864,7 +882,7 @@ const popupIcons = {
 function stationPopupHtml(station: Station) {
   const statusClass = stationStatusClass(station.status);
   const isFavorite = favoriteIds.value.includes(station.id);
-  return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${stationArrivalText(station)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}" style="${stationColorStyle(station)}">${stationStatusLabel(station.status)}</b></div></div>`;
+  return `<div class="station-map-popup"><div class="station-map-popup-title-row"><div class="station-map-popup-title">${escapeHtml(stationName(station))}</div><button class="station-favorite-button${isFavorite ? ' is-favorite' : ''}" type="button" aria-label="${isFavorite ? 'Remove favorite' : 'Add favorite'}" aria-pressed="${isFavorite}">${popupIcons.heart}</button></div><div class="station-map-popup-row"><span class="station-map-popup-icon bus">${popupIcons.bus}</span><strong>${lang.value === 'th' ? 'รถจะมาถึง' : 'Bus Arrival'}</strong><b>${stationArrivalText(station)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon people">${popupIcons.people}</span><strong>${lang.value === 'th' ? 'ผู้โดยสารรออยู่' : 'People Waiting'}</strong><b>${peopleText(station.waiting || 0)}</b></div><div class="station-map-popup-row"><span class="station-map-popup-icon location">${popupIcons.location}</span><strong>${lang.value === 'th' ? 'สถานะสถานี' : 'Station Status'}</strong><b class="station-map-popup-status ${statusClass}" style="${stationColorStyle(station)}">${escapeHtml(stationStatusLabel(station.status, station.statusLabel))}</b></div></div>`;
 }
 
 function bindStationPopupActions(element: HTMLElement, station: Station) {
@@ -896,6 +914,7 @@ function closeStationPopup() {
 }
 
 function toggleStationPopup(station: Station) {
+  closeBusPopup();
   if (stationOverlayStationId === station.id) { closeStationPopup(); return; }
   closeStationPopup();
   stationDetail.value = station;
@@ -1088,7 +1107,7 @@ async function initGoogleMap() {
       mapResizeObserver.observe(mapElement.value);
     }
     window.google.maps.event.addListenerOnce(campusMap, 'idle', () => { if (mapElement.value) mapElement.value.style.opacity = '1'; });
-    campusMap.addListener('click', () => { closeStationPopup(); closeUserLocationPopup(); if (selectedLine.value !== 'all') selectedLine.value = 'all'; });
+    campusMap.addListener('click', () => { closeBusPopup(); closeStationPopup(); closeUserLocationPopup(); if (selectedLine.value !== 'all') selectedLine.value = 'all'; });
     await renderGoogleMap();
   } catch (error) {
     if (mapElement.value) mapElement.value.style.opacity = '1';
@@ -1142,7 +1161,7 @@ function syncRouteControls(routeList: ShuttleRoute[] | null) {
 function publicDataSignature(nextStations: Station[], nextRoutes: ShuttleRoute[]) {
   // Include statusColor so a color-only settings update also refreshes station popups.
   return JSON.stringify({
-    stations: nextStations.map(({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor }) => ({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor })),
+    stations: nextStations.map(({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor, statusLabel }) => ({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor, statusLabel })),
     routes: nextRoutes.map(({ id, name, nameTH, color, enabled, geometry, revision, updatedAt }) => ({ id, name, nameTH, color, enabled, geometry, revision, updatedAt })),
   });
 }
@@ -1203,6 +1222,8 @@ async function loadData() {
 }
 
 onMounted(async () => {
+  // Capture outside clicks even when a toolbar control stops event bubbling.
+  document.addEventListener('click', dismissBusPopupOutsideMap, true);
   window.addEventListener('pagehide', saveMapViewport);
   window.addEventListener('online', refreshBusFeedOnReturn);
   document.addEventListener('visibilitychange', refreshBusFeedOnReturn);
@@ -1221,6 +1242,8 @@ onMounted(async () => {
   publicDataTimer = window.setInterval(() => void refreshPublicData(), 15000);
 });
 onBeforeUnmount(() => {
+  document.removeEventListener('click', dismissBusPopupOutsideMap, true);
+  closeBusPopup();
   saveMapViewport();
   window.removeEventListener('pagehide', saveMapViewport);
   clearBusMarkers();
@@ -1234,7 +1257,7 @@ onBeforeUnmount(() => {
   closeUserLocationPopup();
   clearTimeout(successModalTimer);
 });
-watch(page, (next) => { if (next === 'home') void ensureHomeMap(); });
+watch(page, (next) => { closeBusPopup(); if (next === 'home') void ensureHomeMap(); });
 watch(lang, refreshStationLanguage);
 watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
   selectedRouteAvailable.value = false;
@@ -1290,7 +1313,7 @@ watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
         <p v-if="!routePlanReady">{{ lang === 'th' ? 'กำลังคำนวณเส้นทาง…' : 'Calculating route…' }}</p>
         <p v-else-if="selectedFromId === selectedToId">{{ lang === 'th' ? 'ต้นทางและปลายทางเป็นสถานีเดียวกัน' : 'Origin and destination are the same station.' }}</p>
         <template v-else>
-          <p>{{ lang === 'th' ? 'ไม่พบเส้นทางรถที่ไปถึงสถานีปลายทางได้ในทิศทางนี้' : 'No bus route reaches this stop in the selected direction.' }}</p>
+          <!-- Show the boarding suggestion or its specific fallback without a duplicate route warning. -->
           <div v-if="boardingDetails" class="boarding-suggestion">
             <strong>{{ lang === 'th' ? 'สถานีแนะนำสำหรับขึ้นรถ' : 'Recommended boarding station' }}</strong>
             <p class="boarding-stop">{{ boardingDetails.station }}</p>

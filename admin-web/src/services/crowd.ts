@@ -1,11 +1,19 @@
-import type { CrowdThresholds } from '../types';
-export function crowdLevel(waiting: number, ranges: CrowdThresholds): 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN' {
-  // Keep classification identical to backend-node/services/settings.js, including gaps.
-  for (const level of ['high', 'medium', 'low'] as const) {
-    const { min, max } = ranges[level];
-    if (waiting >= min && (max === null || waiting <= max)) return level === 'high' ? 'HIGH' : level === 'medium' ? 'MEDIUM' : 'LOW';
-  }
-  return 'UNKNOWN';
+import type { CrowdThresholds, CrowdStatus } from '../types';
+export function crowdStatuses(ranges: CrowdThresholds): CrowdStatus[] {
+  return [
+    ...(['low', 'medium', 'high'] as const).map(id => ({ id: id.toUpperCase(), name: ranges.names?.[id] || id, ...ranges[id], color: ranges.colors?.[id] || DEFAULT_CROWD_COLORS[id] })),
+    ...(ranges.customStatuses || []),
+  ];
+}
+export function crowdLevel(waiting: number, ranges: CrowdThresholds): string {
+  return crowdStatuses(ranges).reverse().find(({ min, max }) => waiting >= min && (max === null || waiting <= max))?.id || 'UNKNOWN';
+}
+export function crowdSeverity(level: string, ranges: CrowdThresholds): number {
+  return crowdStatuses(ranges).findIndex(status => status.id === level);
+}
+export function crowdLabel(level: string, ranges: CrowdThresholds, text: Record<string, any>): string {
+  if (['LOW', 'MEDIUM', 'HIGH'].includes(level)) return ranges.names?.[level.toLowerCase() as 'low' | 'medium' | 'high'] || text[level.toLowerCase()];
+  return ranges.customStatuses?.find(status => status.id === level)?.name || (text.language === 'TH' ? 'นอกช่วงที่กำหนด' : 'Outside ranges');
 }
 
 // Accept old servers during a rolling deployment without crashing the page.
@@ -32,6 +40,6 @@ export const DEFAULT_CROWD_COLORS = { low: '#2eb85c', medium: '#f59e0b', high: '
 export function crowdColor(level: string, ranges: CrowdThresholds): string {
   // Older saved settings may not include colors; unmatched counts use neutral gray.
   const key = level.toLowerCase() as keyof typeof DEFAULT_CROWD_COLORS;
-  const color = ranges.colors?.[key];
+  const color = ranges.customStatuses?.find(status => status.id === level)?.color || ranges.colors?.[key];
   return color && /^#[0-9a-f]{6}$/i.test(color) ? color : DEFAULT_CROWD_COLORS[key] || '#64748b';
 }

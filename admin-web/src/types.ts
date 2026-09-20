@@ -23,12 +23,16 @@ export type Station = {
   lng: number;
   lines: string[];
   waiting?: number;
-  status?: 'LOW' | 'MEDIUM' | 'HIGH' | 'UNKNOWN';
+  status?: string;
   cameraUrl?: string;
   detectionRoi?: Array<[number, number]>;
 };
 
+export type CrowdStatus = { id: string; name: string; min: number; max: number | null; color: string };
+
 export type CrowdThresholds = {
+  names?: Partial<Record<'low' | 'medium' | 'high', string>>;
+  customStatuses?: CrowdStatus[];
   colors?: { low: string; medium: string; high: string };
   low: { min: number; max: number | null };
   medium: { min: number; max: number | null };
