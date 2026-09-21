@@ -6,7 +6,8 @@ const adminOnly = require('../middleware/admin');
 
 router.get('/buses/gps-status', tokenRequired, adminOnly, (req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({ ...gps.status(), realtime: gps.realtimeStatus() });
+  res.json({ ...gps.status(), realtime: gps.realtimeStatus(),
+    publicDataRealtime: require('../services/public-data-runtime').realtimeStatus() });
 });
 
 // Versioned snapshot for initial loads, reconnects, and polling fallback.

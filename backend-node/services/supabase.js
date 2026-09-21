@@ -5,12 +5,13 @@ function createBusPublisher({
   fetchImpl = globalThis.fetch,
   timeoutMs = 10000,
   topic = 'mfu-buses',
+  event = 'buses.updated',
 } = {}) {
   let endpoint;
   try {
     const base = new URL(url);
     if (base.protocol === 'https:' && secret?.trim().startsWith('sb_secret_')) {
-      endpoint = new URL(`/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/buses.updated?private=true`, base);
+      endpoint = new URL(`/realtime/v1/api/broadcast/${encodeURIComponent(topic)}/events/${encodeURIComponent(event)}?private=true`, base);
     }
   } catch { /* Missing configuration keeps the existing API working. */ }
   let busy = false;

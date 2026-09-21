@@ -1,6 +1,6 @@
 # ใช้งานและพัฒนา Supabase Realtime
 
-คู่มือนี้อธิบายพฤติกรรมที่มีในโค้ดปัจจุบัน อัปเดต 16 กันยายน 2026
+คู่มือนี้อธิบายพฤติกรรมที่มีในโค้ดปัจจุบัน อัปเดต 22 กันยายน 2026
 เริ่มติดตั้งเครื่องใหม่ที่ [HANDOVER.md](HANDOVER.md)
 
 ## ข้อมูลเดินทางอย่างไร
@@ -152,7 +152,7 @@ node backend-node/scripts/check-realtime.js
 6. เปลี่ยน Network เป็น Offline แล้วกลับ No throttling ตรวจว่าข้อมูลกลับมา; โหมด Offline บางเบราว์เซอร์อาจไม่ตัด WebSocket ทันที ให้ดูสถานะและการรับข้อความประกอบ
 
 ตำแหน่งรถอาจไม่ขยับหากรถจอด ให้ดู `sequence` และ `lastGpsAt` ประกอบ
-ข้อมูลจำนวนคนรอที่สถานียังไม่ได้ย้ายมา Broadcast
+เว็บผู้โดยสารรับจำนวนคนรอผ่าน `public.updated` ในช่องเดียวกัน ดูรายละเอียดด้านล่าง
 
 ### 3. ตรวจจากฝั่งแอดมิน
 
@@ -192,7 +192,6 @@ npm --prefix admin-web run build
 git diff --check
 ```
 
-ชุดแรก 18 tests, ชุดที่สอง 35 tests ณ วันที่อัปเดต รวม 53 tests
 เป็น unit/integration tests ด้วยข้อมูลทดสอบ; การส่งไป Supabase จริงใช้ check script และการดู WebSocket เพิ่มเติม
 
 ## จุดแก้ไขเมื่อพัฒนาต่อ
@@ -210,6 +209,49 @@ git diff --check
 | ใช้ข้อมูลบนหน้าจอ | `src/App.vue` ของทั้งสองเว็บ |
 
 ถ้าแก้ protocol/fallback ต้องแก้ `busFeed.ts` ทั้งสองชุดและทดสอบทั้งคู่
-หากเพิ่ม Realtime ให้จำนวนคนรอ ต้องเชื่อมจุดที่ detector บันทึกข้อมูล ออกแบบ payload และสิทธิ์ก่อนลด polling
+จำนวนคนรอของเว็บผู้โดยสารใช้ `publicDataFeed.ts` โดยรับ event ผ่าน `busFeed.ts` ช่องเดียวกัน ส่วนเว็บแอดมินยังใช้ API สถานีเดิม
 Broadcast ไม่ได้เก็บประวัติให้แอปเรียกคืน; API snapshot ยังจำเป็นสำหรับผู้ใช้ใหม่และการเชื่อมต่อกลับมา
 แพ็กเกจ Free มีข้อจำกัดข้อความและการเชื่อมต่อ ตรวจ [หน้า Limits](https://supabase.com/docs/guides/realtime/limits) ก่อนขยายจำนวนผู้ใช้ ไม่ถือว่าทดสอบสองเว็บผ่านแล้วจะรองรับผู้ใช้ไม่จำกัด
+
+## จำนวนคนรอและ cache เส้นทาง
+
+- `GET /api/public-data` โหลดสถานีทุกสาย ข้อมูลจำนวนคน และ polyline ครั้งแรกใน request เดียว
+- ครั้งถัดไปส่ง `catalogVersion` และ `routesVersion` ใน query: เวอร์ชันเดิมไม่ส่ง metadata/geometry ซ้ำ
+- แก้ชื่อ พิกัด หรือเพิ่ม–ลบสถานี: ส่ง metadata ใหม่ แต่ไม่ส่ง polyline ที่เวอร์ชันเดิม
+- แก้เส้นทาง/เปิด–ปิดสายรถ: ส่ง geometry เวอร์ชันใหม่ด้วย หน้าเว็บคำนวณเส้นทางใหม่และล้างสถานีที่ถูกลบออกจากตัวเลือก
+- จำนวนคน สี และชื่อสถานะเปลี่ยน: อัปเดตเฉพาะข้อมูลสถานี ไม่สร้างแผนที่หรือคำนวณทริปใหม่
+
+`services/public-data-runtime.js` อ่านจำนวนคนจาก MongoDB ส่วนกลางประมาณทุก 1 วินาที
+จึงรองรับ Python detector ที่เขียนฐานข้อมูลโดยตรงด้วย ไม่ต้องส่ง secret ให้ Python หรือ browser
+การเพิ่ม–ลบหรือแก้สถานี/เส้นทางผ่าน API ทำให้ catalog cache หมดอายุทันที
+การแก้ metadata โดยตรงในฐานข้อมูลจะตรวจพบจากรอบตรวจสำรองภายในประมาณ 60 วินาทีเมื่อฐานข้อมูลตอบสนองปกติ
+ข้อมูลจำนวนคน/thresholds อ่านครั้งเดียวต่อรอบต่อ backend process และ HTTP requests ใช้ cache เดียวกัน
+
+ตัวส่งใช้ event `public.updated` บน private channel `mfu-buses` เดิม จึงไม่ต้องเพิ่ม Supabase policy
+ถ้าติดตั้ง policy เดิมไว้ถูกต้องแล้ว ไม่จำเป็นต้องรัน SQL ใหม่
+payload มี `schemaVersion`, `streamId`, `sequence`, `catalogVersion`, `capturedAt`, `kind` และ `stations`
+เมื่อค่าเปลี่ยน `kind: delta` ส่งเฉพาะ `{ id, waiting, status, statusColor, statusLabel }` ของสถานีที่เปลี่ยน
+เมื่อค่าไม่เปลี่ยน ส่ง `kind: heartbeat` พร้อม `stations: []` ประมาณทุก 10 วินาที
+ไม่ส่ง camera URL, detection ROI หรือข้อมูลภายใน detector
+
+หน้าเว็บตรวจ sequence แยกจาก GPS: ข้ามลำดับ, catalog ใหม่, reconnect หรือ backend restart จะเรียก HTTP เพื่อคืนสถานะเต็ม
+heartbeat ช่วยตรวจข้อความสุดท้ายที่ตกหล่นแม้จำนวนคนหยุดเปลี่ยนแล้ว
+ระหว่างรับ event ต่อเนื่องไม่มี polling สถานี; ถ้าไม่มี Realtime หรือเงียบเกิน 25 วินาที
+จะใช้ HTTP สำรองประมาณทุก 15–18 วินาที และถ้า HTTP ล้มเหลวจะเพิ่มช่วงรอเป็น 30 และ 60 วินาทีพร้อมเวลาสุ่มเล็กน้อย
+ข้อมูลอาจเก่าในช่วงเน็ตหลุด จึงคงข้อมูลล่าสุดไว้และซิงก์ใหม่เมื่อเชื่อมต่อกลับ
+
+การใช้งานเวอร์ชันนี้ต้องรีสตาร์ต Node backend เพื่อโหลด endpoint/worker ใหม่
+จากนั้นรีเฟรชเว็บหรือ deploy build ใหม่ตามสภาพแวดล้อม ไม่ต้อง migrate MongoDB
+ยังต้องใช้ backend/worker เดียวต่อสภาพแวดล้อมตามข้อจำกัดด้านบน
+
+ตรวจเพิ่ม:
+
+```powershell
+node --test --experimental-test-isolation=none frontend-vue/test/*.test.mjs backend-node/test/public-data.test.js backend-node/test/supabase.test.js backend-node/test/stationRouting.test.js
+node --test backend-node/test/routes.test.js backend-node/test/public-data-api.test.js
+```
+
+API integration test ใช้ฐานข้อมูลชื่อสุ่มและปิด publisher เพื่อไม่ส่งข้อมูลทดสอบให้ผู้ใช้จริง
+ชุดทดสอบครอบคลุม direct detector writes, สี/thresholds, CRUD สถานี/เส้นทาง, ปิดทุกสาย,
+ข้อความซ้ำ/ผิดลำดับ/ตกหล่น, reconnect, restart, cache ที่กำลังอ่านขณะมีการแก้ไข และ fallback
+การทดสอบ cache พร้อมกัน 1,000 calls เป็นการตรวจการแชร์การอ่านฐานข้อมูล ไม่ใช่ผล load test ผู้ใช้งานจริง 1,000 คน

@@ -57,7 +57,8 @@ role: admin
 | `nameTH` | string | Optional | Thai station name |
 | `lat` | number | Yes | latitude |
 | `lng` | number | Yes | longitude |
-| `lines` | string[] | Yes | values: `line1`, `line2` |
+| `lines` | string[] | Yes | IDs of existing service routes |
+| `routeBearings` | object | Optional | Per-line bus heading in degrees `[0, 360)` for ambiguous polyline overlaps; see [routing.md](routing.md) |
 | `waiting` | number | Optional | จำนวนคนรอ |
 | `status` | string | Optional | `LOW`, `MEDIUM`, `HIGH` |
 | `cameraUrl` | string | Optional | CCTV/stream URL |
@@ -68,7 +69,8 @@ Validation from `backend-node/routes/station.js`:
 - `id` cannot be empty
 - `name` cannot be empty
 - `lat` and `lng` must be finite numbers
-- `lines` must contain at least one of `line1`, `line2`
+- `lines` must contain at least one existing route ID
+- `routeBearings` optionally maps assigned route IDs to numeric headings; `null` or `{}` clears the hints
 - `waiting` must be number >= 0
 - `status` must be `LOW`, `MEDIUM`, or `HIGH`
 - `detectionRoi` must be array of `[x, y]` where each value is 0..1, or `null` to reset to `[]`

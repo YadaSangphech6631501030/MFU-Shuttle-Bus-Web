@@ -22,6 +22,7 @@ export type Station = {
   lat: number;
   lng: number;
   lines: string[];
+  routeBearings?: Record<string, number>;
   waiting?: number;
   status?: string;
   cameraUrl?: string;

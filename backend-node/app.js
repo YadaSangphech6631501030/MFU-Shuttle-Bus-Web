@@ -9,6 +9,7 @@ const authRoutes = require("./routes/auth");
 const stationRoutes = require("./routes/station");
 const busRoutes = require("./routes/bus.routes");
 const gps = require('./services/gps-runtime');
+const publicData = require('./services/public-data-runtime');
 const reportRoutes = require("./routes/report.routes");
 const detectorRoutes = require("./routes/detector.routes");
 
@@ -25,6 +26,7 @@ app.use(express.json({ limit: '1mb' }));
 app.use("/auth", authRoutes);
 app.use("/station", stationRoutes);
 app.use("/api", busRoutes);
+app.use("/api", require('./routes/public-data.routes'));
 app.use("/api", require('./routes/route.routes'));
 app.use("/api", require('./routes/settings'));
 app.use("/api", reportRoutes);
@@ -42,6 +44,7 @@ async function start() {
   try {
     await connectDB();
     gps.start();
+    publicData.start();
 
     app.listen(PORT, "0.0.0.0", () => {
       console.log(`Server running on http://localhost:${PORT}`);

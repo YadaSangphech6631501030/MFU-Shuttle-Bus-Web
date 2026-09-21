@@ -7,6 +7,7 @@ export type Station = {
   lat: number;
   lng: number;
   lines?: string[];
+  routeBearings?: Record<string, number>;
   waiting?: number;
   status?: string;
 };
@@ -130,6 +131,13 @@ export const api = {
 
   getRoutes() {
     return request<ShuttleRoute[]>('/api/routes', { cache: 'no-store' });
+  },
+
+  getPublicData(catalogVersion: string | undefined, routesVersion: string | undefined, signal: AbortSignal) {
+    const query = new URLSearchParams();
+    if (catalogVersion) query.set('catalogVersion', catalogVersion);
+    if (routesVersion) query.set('routesVersion', routesVersion);
+    return request<unknown>(`/api/public-data?${query}`, { signal, cache: 'no-store' });
   },
 
   getStations(line: string) {

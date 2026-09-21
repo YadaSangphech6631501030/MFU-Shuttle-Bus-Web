@@ -5,6 +5,8 @@ const { getDB } = require("../db");
 const tokenRequired = require("../middleware/jwt");
 const adminOnly = require("../middleware/admin");
 const { getCrowdThresholds, crowdLevel, crowdStatuses } = require('../services/settings');
+const { normalizeRouteBearings } = require('../services/stationRouting');
+const publicData = require('../services/public-data-runtime');
 
 const allowedStatuses = ["LOW", "MEDIUM", "HIGH"];
 
@@ -87,6 +89,12 @@ async function normalizeStationBody(body, { partial = false } = {}) {
     station.lines = [...new Set(lines)];
   }
 
+  if (body.routeBearings !== undefined) {
+    const parsed = normalizeRouteBearings(body.routeBearings, station.lines);
+    if (parsed.error) return parsed;
+    station.routeBearings = parsed.routeBearings;
+  }
+
   if (body.waiting !== undefined) {
     const waiting = Number(body.waiting);
     if (!Number.isFinite(waiting) || waiting < 0) {
@@ -165,6 +173,7 @@ router.post("/admin", tokenRequired, adminOnly, async (req, res) => {
     }
 
     await col.insertOne(parsed.station);
+    publicData.invalidate();
 
     res.status(201).json({ message: "Station created" });
   } catch (err) {
@@ -184,6 +193,12 @@ router.put("/admin/:id", tokenRequired, adminOnly, async (req, res) => {
 
     const db = getDB();
     const col = db.collection("stations");
+    if (parsed.station.routeBearings !== undefined && parsed.station.lines === undefined) {
+      const existing = await col.findOne({ id: req.params.id });
+      if (!existing) return res.status(404).json({ error: "Station not found" });
+      const bearings = normalizeRouteBearings(parsed.station.routeBearings, existing.lines || []);
+      if (bearings.error) return res.status(400).json({ error: bearings.error });
+    }
 
     if (parsed.station.id && parsed.station.id !== req.params.id) {
       const existingStation = await col.findOne({ id: parsed.station.id });
@@ -202,6 +217,7 @@ router.put("/admin/:id", tokenRequired, adminOnly, async (req, res) => {
       return res.status(404).json({ error: "Station not found" });
     }
 
+    publicData.invalidate();
     res.json({ message: "Station updated" });
   } catch (err) {
     if (err.code === 11000) {
@@ -223,6 +239,7 @@ router.delete("/admin/:id", tokenRequired, adminOnly, async (req, res) => {
       return res.status(404).json({ error: "Station not found" });
     }
 
+    publicData.invalidate();
     res.json({ message: "Station deleted" });
   } catch (err) {
     console.error(err);

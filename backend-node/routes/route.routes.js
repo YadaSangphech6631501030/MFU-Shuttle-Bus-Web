@@ -3,6 +3,7 @@ const { getDB } = require('../db');
 const tokenRequired = require('../middleware/jwt');
 const adminOnly = require('../middleware/admin');
 const { validateRoute } = require('../services/routes');
+const publicData = require('../services/public-data-runtime');
 
 router.get('/routes', async (req, res) => {
   try {
@@ -28,8 +29,9 @@ router.post('/routes', tokenRequired, adminOnly, async (req, res) => {
       { $set: { ...route, createdAt: document.createdAt, updatedAt: document.updatedAt }, $unset: { deletedAt: '' }, $inc: { revision: 1 } },
       { returnDocument: 'after', projection: { _id: 0 } },
     );
-    if (restored) return res.status(201).json(restored);
+    if (restored) { publicData.invalidate(); return res.status(201).json(restored); }
     await getDB().collection('routes').insertOne({ ...document });
+    publicData.invalidate();
     res.status(201).json(document);
   } catch (error) {
     res.status(error.code === 11000 ? 409 : 500).json({ error: error.code === 11000 ? 'Route ID already exists' : 'Could not create route' });
@@ -50,6 +52,7 @@ router.put('/routes/:id', tokenRequired, adminOnly, async (req, res) => {
       { returnDocument: 'after', projection: { _id: 0 } },
     );
     if (!updated) return res.status(409).json({ error: 'This route changed or no longer exists. Reload routes before saving.' });
+    publicData.invalidate();
     res.json(updated);
   } catch { res.status(500).json({ error: 'Could not save route' }); }
 });
@@ -77,6 +80,7 @@ router.delete('/routes/:id', tokenRequired, adminOnly, async (req, res) => {
       { $set: { deletedAt: new Date(), enabled: false, updatedAt: new Date() }, $inc: { revision: 1 } },
     );
     if (!result.matchedCount) return res.status(409).json({ error: 'This route changed. Reload routes before deleting.' });
+    publicData.invalidate();
     res.json({ message: 'Route deleted', id: route.id });
   } catch { res.status(500).json({ error: 'Could not delete route' }); }
 });

@@ -1,5 +1,6 @@
 -- Run once in this project's Supabase SQL Editor.
--- Bus locations are already public through GET /api/buses. Allow read-only
+-- Bus locations and station crowds are public through GET /api/buses and
+-- GET /api/public-data. Both events reuse mfu-buses. Allow read-only
 -- visitors on this one private channel; no Supabase user account is needed.
 begin;
 
