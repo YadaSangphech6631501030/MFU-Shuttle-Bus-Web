@@ -4,6 +4,7 @@ export { distanceMeters, pathDistanceMeters, type Point } from './routeGeometry.
 export type Stop = Point & { id: string; lines?: string[]; routeBearings?: Record<string, number> };
 export type Ride = { line: string; path: Point[] };
 export type AlightingSuggestion = Ride & { stationId: string; distanceMeters: number };
+export type BoardingSuggestion = Ride & { stationId: string; distanceMeters: number; alighting: AlightingSuggestion | null };
 export type TripPlan = { ride: Ride | null; alighting: AlightingSuggestion | null };
 // Straight-line walking proximity, not a pedestrian route or crossing instruction.
 export const MAX_NEARBY_METERS = 500;
@@ -81,7 +82,42 @@ export function createRoutePlanner(stops: Stop[], paths: Map<string, Point[]>) {
     // that line as well. Explicit line filters already restrict the supplied paths.
     return { ride: direct, alighting: alighting(fromId, toId, direct?.line) };
   }
-  return { ride, alighting, plan };
+  function boarding(fromId: string, toId: string, preferredLine?: string): BoardingSuggestion | null {
+    const from = stations.get(fromId), to = stations.get(toId);
+    if (!from || !to || fromId === toId || !validPoint(from) || !validPoint(to)) return null;
+    const original = plan(fromId, toId, preferredLine);
+    // Keep existing trips and alighting advice. Walking to another boarding stop
+    // is a fallback when the selected origin cannot supply a useful ride.
+    if (original.ride || original.alighting) return null;
+    const directWalkSeconds = distanceMeters(from, to) / WALK_SPEED_METERS_PER_SECOND;
+    const candidates: { suggestion: BoardingSuggestion; seconds: number; walking: number }[] = [];
+    for (const stop of stations.values()) {
+      if (stop.id === fromId || stop.id === toId) continue;
+      const walkMeters = distanceMeters(from, stop);
+      if (walkMeters > MAX_NEARBY_METERS) continue;
+      for (const { line } of lines) {
+        const direct = ride(stop.id, toId, line);
+        const alternative = alighting(stop.id, toId, line);
+        const actual = alternative || direct;
+        if (!actual || alternative?.stationId === fromId) continue;
+        const walking = walkMeters + (alternative?.distanceMeters || 0);
+        const seconds = walking / WALK_SPEED_METERS_PER_SECOND + pathDistanceMeters(actual.path) / BUS_SPEED_METERS_PER_SECOND;
+        // Do not suggest walking past a nearby destination just to ride a long
+        // circuit back. This is the same straight-line walking estimate as above.
+        if (seconds >= directWalkSeconds) continue;
+        candidates.push({ suggestion: { ...actual, stationId: stop.id, distanceMeters: walkMeters, alighting: alternative }, seconds, walking });
+      }
+    }
+    // A walk can reach another line, but campus destinations still prefer line 1
+    // when it offers a useful trip. Explicit filters restrict `paths` already.
+    const preferred = preferredLine && to.lines?.includes(preferredLine)
+      ? candidates.filter(candidate => candidate.suggestion.line === preferredLine) : [];
+    const ranked = preferred.length ? preferred : candidates;
+    ranked.sort((a, b) => a.seconds - b.seconds || a.walking - b.walking
+      || a.suggestion.stationId.localeCompare(b.suggestion.stationId) || a.suggestion.line.localeCompare(b.suggestion.line));
+    return ranked[0]?.suggestion || null;
+  }
+  return { ride, alighting, plan, boarding };
 }
 
 export function findRide(from: Stop, to: Stop, paths: Map<string, Point[]>): Ride | null {

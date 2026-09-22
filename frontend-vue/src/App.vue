@@ -9,7 +9,7 @@ import { arrivalUnavailableReason, canEstimateArrival, gpsAgeMs, lastKnownPositi
 import { estimateRouteArrival, routeProgressAtPosition, routeBearingAtPosition, angleDifference } from './arrival';
 import { createGpsMotionEstimator } from './gpsMotion';
 import { arrivalStatusText, tripTimeText } from './arrivalDisplay';
-import { distanceMeters, pathDistanceMeters, createRoutePlanner, BUS_SPEED_METERS_PER_SECOND, type AlightingSuggestion } from './routePlanning';
+import { distanceMeters, pathDistanceMeters, createRoutePlanner, BUS_SPEED_METERS_PER_SECOND, type AlightingSuggestion, type BoardingSuggestion } from './routePlanning';
 import busLeftUrl from '../assets/gemcar_left.png';
 import busRightUrl from '../assets/gemcar_right.png';
 import busIconUrl from '../assets/bus.png';
@@ -73,6 +73,7 @@ const selectedRouteAvailable = ref(false);
 const selectedRideLine = ref<string | null>(null);
 const selectedRideDistance = ref(0);
 const alightingSuggestion = ref<AlightingSuggestion | null>(null);
+const boardingSuggestion = ref<BoardingSuggestion | null>(null);
 const routePlanReady = ref(false);
 const userLocation = ref<RoutePoint | null>(null);
 const locationError = ref('');
@@ -778,6 +779,17 @@ function peopleText(value = 0) {
 }
 
 // Show approximate proximity to the nearest metre without inflating short walks.
+const boardingDetails = computed(() => {
+  const suggestion = boardingSuggestion.value;
+  if (!suggestion) return null;
+  const station = stations.value.find((item) => item.id === suggestion.stationId);
+  const destination = stations.value.find((item) => item.id === selectedToId.value);
+  const route = availableRoutes.value.find((item) => item.id === suggestion.line);
+  if (!station || !destination || !route) return null;
+  return { station: stationName(station), destination: stationName(destination),
+    line: lang.value === 'th' ? route.nameTH || route.name : route.name, meters: Math.round(suggestion.distanceMeters) };
+});
+
 const alightingDetails = computed(() => {
   const suggestion = alightingSuggestion.value;
   if (!suggestion) return null;
@@ -925,6 +937,7 @@ async function renderGoogleMap() {
   selectedRouteAvailable.value = false;
   selectedRideLine.value = null;
   alightingSuggestion.value = null;
+  boardingSuggestion.value = null;
   routePlanReady.value = false;
 
   removeMapOverlays();
@@ -951,14 +964,17 @@ async function renderGoogleMap() {
   const planner = createRoutePlanner(stations.value, routePaths);
   const trip = selectedFrom && selectedTo
     ? planner.plan(selectedFrom.id, selectedTo.id, lineSelection === 'all' ? 'line1' : undefined) : null;
-  const ride = trip?.ride || null;
-  alightingSuggestion.value = trip?.alighting || null;
-  selectedRouteAvailable.value = ride !== null && !alightingSuggestion.value;
+  boardingSuggestion.value = selectedFrom && selectedTo && !trip?.ride && !trip?.alighting
+    ? planner.boarding(selectedFrom.id, selectedTo.id, lineSelection === 'all' ? 'line1' : undefined) : null;
+  const ride = boardingSuggestion.value || trip?.ride || null;
+  alightingSuggestion.value = boardingSuggestion.value?.alighting || trip?.alighting || null;
+  selectedRouteAvailable.value = ride !== null && !alightingSuggestion.value && !boardingSuggestion.value;
   selectedRideLine.value = ride?.line || null;
   selectedRideDistance.value = ride ? pathDistanceMeters(ride.path) : 0;
   routePlanReady.value = true;
   const stationList = selectedFrom && selectedTo
-    ? stations.value.filter((station) => station.id === selectedFrom.id || station.id === selectedTo.id || station.id === alightingSuggestion.value?.stationId)
+    ? stations.value.filter((station) => station.id === selectedFrom.id || station.id === selectedTo.id
+      || station.id === alightingSuggestion.value?.stationId || station.id === boardingSuggestion.value?.stationId)
     : stations.value.filter((station) => lineSelection === 'all' || station.lines?.includes(lineSelection));
   stationList.forEach((station) => { points.push({ lat: station.lat, lng: station.lng }); const marker = new window.google.maps.Marker({ position: { lat: station.lat, lng: station.lng }, map: campusMap, title: stationName(station), icon: { url: busStopUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 50) } }); marker.set('stationId', station.id); marker.addListener('click', () => toggleStationPopup(station)); mapMarkers.push(marker); });
   points.push(...renderBusMarkers(routePaths));
@@ -1207,6 +1223,7 @@ watch([selectedLine, stationCatalogVersion, routes, selectedFromId, selectedToId
   selectedRouteAvailable.value = false;
   selectedRideLine.value = null;
   alightingSuggestion.value = null;
+  boardingSuggestion.value = null;
   routePlanReady.value = false;
   void renderGoogleMap();
 }, { deep: true });
@@ -1257,15 +1274,25 @@ watch([selectedLine, stationCatalogVersion, routes, selectedFromId, selectedToId
         <p v-if="!routePlanReady">{{ lang === 'th' ? 'กำลังคำนวณเส้นทาง…' : 'Calculating route…' }}</p>
         <p v-else-if="selectedFromId === selectedToId">{{ lang === 'th' ? 'ต้นทางและปลายทางเป็นสถานีเดียวกัน' : 'Origin and destination are the same station.' }}</p>
         <template v-else>
-          <!-- Reuse the existing recommendation card for a stop near the destination. -->
+          <!-- Keep boarding and alighting advice in the existing summary card. -->
+          <div v-if="boardingDetails" class="boarding-suggestion">
+            <strong>{{ lang === 'th' ? 'สถานีแนะนำสำหรับขึ้นรถ' : 'Recommended boarding station' }}</strong>
+            <p class="boarding-stop">{{ boardingDetails.station }}</p>
+            <p>{{ boardingDetails.line }}</p>
+            <p>{{ lang === 'th' ? 'ห่างจากต้นทางที่เลือกประมาณ' : 'Approximately' }} <b>{{ boardingDetails.meters }} {{ lang === 'th' ? 'เมตร' : 'm' }}</b>{{ lang === 'th' ? ' (ระยะเส้นตรง)' : ' from selected origin (straight-line)' }}</p>
+            <p v-if="!alightingDetails">{{ lang === 'th' ? 'เดินไปขึ้นรถที่สถานีนี้ แล้วลงที่' : 'Walk to this stop to board, then get off at' }} {{ boardingDetails.destination }}</p>
+            <p v-else>{{ lang === 'th' ? 'เดินไปขึ้นรถที่สถานีนี้ แล้วลงรถตามคำแนะนำด้านล่าง' : 'Walk to this stop to board, then use the alighting recommendation below.' }}</p>
+          </div>
           <div v-if="alightingDetails" class="boarding-suggestion">
             <strong>{{ lang === 'th' ? 'สถานีแนะนำสำหรับลงรถ' : 'Recommended alighting station' }}</strong>
             <p class="boarding-stop">{{ alightingDetails.station }}</p>
             <p>{{ alightingDetails.line }}</p>
             <p>{{ lang === 'th' ? 'ห่างจากปลายทางที่เลือกประมาณ' : 'Approximately' }} <b>{{ alightingDetails.meters }} {{ lang === 'th' ? 'เมตร' : 'm' }}</b>{{ lang === 'th' ? ' (ระยะเส้นตรง)' : ' from selected destination (straight-line)' }}</p>
-            <p>{{ lang === 'th' ? 'ขึ้นรถจากต้นทางเดิม ลงที่สถานีนี้ แล้วเดินต่อไปยังปลายทาง' : 'Board at your selected origin, get off here, then walk to your destination.' }}</p>
+            <p>{{ boardingDetails
+              ? (lang === 'th' ? 'ลงรถที่สถานีนี้ แล้วเดินต่อไปยังปลายทาง' : 'Get off here, then walk to your destination.')
+              : (lang === 'th' ? 'ขึ้นรถจากต้นทางเดิม ลงที่สถานีนี้ แล้วเดินต่อไปยังปลายทาง' : 'Board at your selected origin, get off here, then walk to your destination.') }}</p>
           </div>
-          <p v-else>{{ lang === 'th' ? 'ไม่พบสถานีลงรถที่เดินทางจากต้นทางได้และอยู่ภายในระยะเส้นตรง 500 เมตรจากปลายทางที่เลือก กรุณาลองเปลี่ยนต้นทางหรือสายรถ' : 'No reachable alighting station within 500 m of the selected destination (straight-line). Try another origin or bus line.' }}</p>
+          <p v-if="!boardingDetails && !alightingDetails">{{ lang === 'th' ? 'ไม่พบคำแนะนำสถานีขึ้น–ลงรถที่เหมาะสมภายในระยะเส้นตรง 500 เมตรจากต้นทางและปลายทางที่เลือก กรุณาลองเปลี่ยนสถานีหรือสายรถ' : 'No suitable boarding or alighting recommendation within 500 m of the selected origin and destination (straight-line). Try another station or bus line.' }}</p>
         </template>
       </div></div>
 

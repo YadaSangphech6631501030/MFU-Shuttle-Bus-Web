@@ -88,6 +88,27 @@ The map's bus path ends at the recommended alighting stop. Walking proximity is
 displayed separately, rounded to the nearest metre. Lamduan 2 to M-Square still
 recommends Oval Pond, about 21 m straight-line from M-Square.
 
+## Nearby boarding recommendations
+
+When neither a direct ride nor an alighting recommendation is available from the
+selected origin, consider boarding stops within 500 m straight-line of that
+origin. This fallback does not replace an existing trip or change the selections.
+Candidate rides follow the same ordered polyline and passenger-run boundary as
+normal trips. Rank walking to board, the bus ride, and any walk after alighting
+using the same planning speeds. Keep line 1 as the preferred service for campus
+destinations when it provides a useful candidate; respect explicit line filters.
+
+Reject boarding at the selected destination, riding back to the selected origin,
+and alternatives whose estimated ride-plus-walk time is no better than walking
+directly. Walking estimates are straight-line proximity, not verified pedestrian
+routes, and do not include live bus waiting time. No station-ID rules are needed.
+
+For example, Minimart Lamduan to Lamduan 7 outbound recommends walking about 120 m
+to Lamduan 2 and boarding line 1. The bus path starts at Lamduan 2, so it never
+depicts riding past the previous run's terminus. Minimart to M-Square can recommend
+both boarding at Lamduan 2 and alighting at Oval Pond, with separate 120 m and
+21 m walking distances. Both recommendations use the existing summary card style.
+
 ## Data changes and checks
 
 The passenger app loads a versioned catalog through `/api/public-data` and listens
