@@ -78,7 +78,7 @@ docs/              คู่มือระบบและส่งต่อง�
 ## แอดมิน
 
 หน้า UI อยู่ใน `admin-web/src/page/`: `Dashboard.vue`, `Stations.vue`, `StationCCTV.vue`,
-`Buses.vue`, `Routes.vue`, `Reports.vue`, `Users.vue`
+`Buses.vue`, `Routes.vue`, `Reports.vue`, `Users.vue`, `Settings.vue`
 state ส่วนกลางและ timers ส่วนใหญ่อยู่ที่ `admin-web/src/App.vue`; types อยู่ `src/types.ts`
 
 ## ทดสอบและเอกสาร
@@ -97,3 +97,19 @@ state ส่วนกลางและ timers ส่วนใหญ่อยู
 - [data.md](data.md), [er.md](er.md): ฐานข้อมูลและความสัมพันธ์
 
 อย่าแก้ `node_modules`, `dist` หรือ `backend-node/runtime` เป็น source code และอย่า commit `.env`
+
+## ไฟล์เพิ่มเติม: Settings และข้อมูลสถานี Realtime
+
+| ไฟล์ | หน้าที่ |
+|---|---|
+| `backend-node/services/settings.js` | อ่าน/ตรวจ/บันทึกช่วง ชื่อ สี และสถานะเพิ่มเติมใน MongoDB |
+| `backend-node/routes/settings.js` | GET/PUT `/api/settings/crowd-thresholds` เฉพาะ Admin |
+| `admin-web/src/page/Settings.vue` | ฟอร์มแก้ชื่อ ช่วง สี เพิ่ม/ลบแถว และบันทึก |
+| `admin-web/src/services/crowd.ts` | จับคู่สถานะ ชื่อ สี และระดับแจ้งเตือน |
+| `backend-node/services/public-data.js` | shared cache, version และ delta ข้อมูลสถานี |
+| `backend-node/services/public-data-runtime.js` | อ่าน MongoDB และส่ง `public.updated` |
+| `backend-node/routes/public-data.routes.js` | GET `/api/public-data` |
+| `frontend-vue/src/services/publicDataFeed.ts` | snapshot และรับข้อมูลสถานีผ่าน busFeed |
+
+ทดสอบที่เกี่ยวข้อง: `backend-node/test/settings.test.js`, `settings-api.test.js`, `public-data.test.js`, `public-data-api.test.js` และ `frontend-vue/test/publicDataFeed.test.mjs`
+รายละเอียด protocol อยู่ใน [REALTIME.md](REALTIME.md) และข้อจำกัด Settings อยู่ใน [HANDBOOK.md](HANDBOOK.md#37-admin-settings)

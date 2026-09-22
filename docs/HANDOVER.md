@@ -134,7 +134,19 @@ Seed โหลด root `.env` ผ่าน `config.js` โดยอัตโน�
 ## 7. พัฒนาต่อที่ไหน
 
 ดู [projectmap.md](projectmap.md) สำหรับรายการไฟล์ และ [REALTIME.md](REALTIME.md) สำหรับ protocol, สิทธิ์, fallback และ troubleshooting
-ข้อมูลสถานี เส้นทาง รายงาน และ detector ยังใช้ API ตามเดิม; งาน Realtime รอบนี้ครอบคลุมตำแหน่ง/สถานะ GPS ของรถ
+ข้อมูล GPS ใช้ `buses.updated` ทั้งสองเว็บ ส่วน User Web โหลด `/api/public-data` ครั้งแรกและรับจำนวนคน/สถานะสถานีผ่าน `public.updated` บน private channel เดียวกัน
+Admin Web ยังโหลดข้อมูลสถานีผ่าน API เดิม รายงานและ detector ยังใช้ API ตามเดิม ดูรายละเอียดและ fallback ใน [REALTIME.md](REALTIME.md#จำนวนคนรอและ-cache-เส้นทาง)
 อย่าเพิ่มข้อมูลกล้อง ผู้ใช้ หรือรายงานส่วนตัวลงช่องรถที่ผู้โดยสารอ่านได้
 
 สำหรับ Docker ใช้ [DOCKER.md](DOCKER.md) และสำหรับวิธีใช้หน้าเว็บใช้ [HANDBOOK.md](HANDBOOK.md)
+
+## ตรวจรับ Settings และข้อมูลสถานีเพิ่มเติม
+
+- [ ] Admin เปิด Settings กดดินสอ แก้ชื่อ สี/HEX และ From–To แล้วบันทึก จากนั้นรีโหลดเพื่อยืนยันค่าคงอยู่
+- [ ] ช่วงตัวเลขที่ชนกันหรือชื่อซ้ำบันทึกไม่ได้; เว้น To ว่างได้เฉพาะแถวสุดท้าย
+- [ ] เพิ่มสถานะใหม่โดยกำหนด To ของแถวก่อนหน้าให้สิ้นสุดก่อน From ของแถวใหม่
+- [ ] User Web รับจำนวนคน สี และชื่อสถานะที่เปลี่ยนโดยไม่ต้องรีเฟรชหน้า และกลับมาโหลด snapshot ได้เมื่อ reconnect
+- [ ] สำรอง collection `settings` และ `routes` ร่วมกับข้อมูลเดิม
+
+ข้อจำกัดของการลบสถานะและรูปแบบข้อมูลดู [Admin Settings](HANDBOOK.md#37-admin-settings) และ [Data dictionary](data.md#11-crowd-settings-and-public-station-data)
+รายการนี้เป็น checklist สำหรับทดสอบครั้งถัดไป ไม่ใช่ผลทดสอบ production ที่ยืนยันแล้ว

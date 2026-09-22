@@ -1,6 +1,6 @@
 # รัน MFU Shuttle Bus Web ด้วย Docker
 
-อัปเดตตาม `docker-compose.yml` วันที่ 16 กันยายน 2026 ทั้ง Admin และ Passenger เป็น Vue/Vite
+อัปเดตตาม `docker-compose.yml` วันที่ 22 กันยายน 2026 ทั้ง Admin และ Passenger เป็น Vue/Vite
 
 ## เตรียมก่อนรัน
 
@@ -30,6 +30,7 @@ docker compose ps
 | mongo | localhost:27017 |
 
 ทั้งสองเว็บรันเป็น service ปกติ ไม่มี profile Flutter
+Docker images ใช้ Node.js 22 เพื่อรองรับ Supabase SDK ที่ติดตั้งใน lockfile ซึ่งต้องการ Node.js >=22
 
 ```bash
 docker compose logs -f backend
@@ -38,6 +39,32 @@ docker compose down
 ```
 
 `down` ปกติเก็บ named volumes ไว้ ไม่ต้องเติม `-v` สำหรับการหยุดหรืออัปเดตโค้ด เพราะ `-v` ลบข้อมูลใน volumes
+
+## อัปเดตโค้ดใน Docker โดยเก็บข้อมูลเดิม
+
+เปิด Docker Desktop ให้พร้อมก่อน แล้วรันจาก root repository:
+
+```bash
+docker compose config --quiet
+docker compose up -d --build backend admin-web user-web
+docker compose ps
+```
+
+ถ้า Backend หรือ MongoDB แบบ local ใช้พอร์ต 5101/27017 อยู่ ให้หยุด service local ก่อนเปิดชุด Compose โดยตรวจให้แน่ใจว่าจะใช้ฐานข้อมูลชุดใด: MongoDB ใน Docker ใช้ named volume ของตัวเอง ไม่ได้อ่านฐาน local อัตโนมัติ
+ถ้าต้องการสร้าง image ก่อนโดยยังไม่สลับระบบ ให้รัน `docker compose build backend admin-web user-web`
+
+คำสั่งนี้ build จากโค้ดในเครื่องและ recreate service ที่เปลี่ยน โดยใช้ MongoDB volume เดิม ไม่ต้อง import demo หรือรัน seed ซ้ำ และไม่ใช้ `down -v`
+การใช้เพียง `docker compose restart` จะไม่ build โค้ดใหม่หรือรับ environment ที่เปลี่ยน
+
+เวอร์ชันปัจจุบันรวมหน้า Admin Settings และ `/api/public-data` ใน image อยู่แล้ว:
+
+- Settings เก็บชื่อ สี และช่วงจำนวนคนใน collection `settings` ของ MongoDB เดิม ไม่ต้องสร้างตาราง Supabase เพิ่ม
+- เส้นทางเก็บใน collection `routes`; Backend initialize ค่าเริ่มต้นเฉพาะรายการที่ยังไม่มี
+- Backend ส่ง `buses.updated` และ `public.updated` ผ่าน private channel `mfu-buses` เดิม ถ้าตั้ง policy ตาม `backend-node/sql/realtime.sql` แล้ว ไม่ต้องเพิ่ม policy สำหรับ event ใหม่
+- User Web รับจำนวนคนและสถานะผ่าน Realtime ส่วน Admin Web ยังโหลดข้อมูลสถานีผ่าน API เดิม
+
+ก่อนอัปเดตระบบที่มีข้อมูลใช้งานจริง ให้สำรอง MongoDB รวม `settings` และ `routes` ด้วย
+หลังอัปเดต เปิด Admin Settings ตรวจค่าที่บันทึก และเปิด User Web ตรวจชื่อ/สี/จำนวนคน หากหน้าเว็บยังแสดงรุ่นเก่าให้ reload หน้าเว็บ
 
 ## Environment
 
@@ -89,6 +116,7 @@ GPS จริงใช้ fleet registry กับข้อมูล `source: pp
 ```bash
 curl http://localhost:5101/health
 curl http://localhost:5101/api/buses/snapshot
+curl http://localhost:5101/api/public-data
 docker compose exec backend node scripts/check-realtime.js
 ```
 

@@ -205,3 +205,27 @@ When changing schema or seed data:
 5. Update `docs/data.md`
 6. Update `docs/er.md` if relationships changed
 7. Run relevant build/analyze checks
+
+## 11. Crowd Settings And Public Station Data
+
+MongoDB collection `settings` เก็บเอกสารเดียว `_id: "crowd-thresholds"` ใช้ร่วมกันทุกสถานี
+
+| Field | รูปแบบ / ความหมาย |
+|---|---|
+| `low`, `medium`, `high` | `{ min, max }` จำนวนเต็มไม่ติดลบ; API ยอมรับ `max >= min`, `null` คือไม่จำกัด |
+| `colors` | `{ low, medium, high }` เป็น HEX `#RRGGBB` เก็บเป็นตัวพิมพ์เล็ก |
+| `names` | ชื่อแสดงแทนของสามระดับหลัก; ไม่เปลี่ยน ID |
+| `customStatuses` | สูงสุด 20 รายการ `{ id, name, min, max, color }`; ID รูปแบบ `custom_...` ต้องไม่ซ้ำ |
+| `updatedAt` | วันที่บันทึกสำเร็จ |
+
+ค่าเริ่มต้นคือ Low 0–5, Medium 6–9, High 10 ขึ้นไป สี `#2eb85c`, `#f59e0b`, `#dc3545` ตามลำดับ
+ชื่อทุกระดับต้องไม่ซ้ำกันแบบ case-insensitive ยาว 1–60 ตัวอักษรและไม่ใช่ `unknown` ช่วงเรียงตาม low → medium → high → customStatuses โดยไม่ทับกัน อนุญาตให้แถวสุดท้ายเท่านั้นมี `max: null`
+หน้า Settings ตรวจ To มากกว่า From แม้ API ยอมรับช่วงค่าเดียวได้ เป็นข้อแตกต่างปัจจุบันระหว่าง UI และ API
+อ่านรูปแบบเดิม `{ medium: 6, high: 10 }` ได้โดยแปลงในหน่วยความจำ; ไม่เขียนทับข้อมูลเก่าอัตโนมัติ
+
+`GET/PUT /api/settings/crowd-thresholds` ต้องใช้ Admin JWT; PUT ตรวจค่าก่อนเขียนและคืน 400 เมื่อค่าไม่ถูกต้อง
+
+แยกจาก `stations.status` และ validation ของ station CRUD ที่ยังรับ LOW/MEDIUM/HIGH: สถานะสาธารณะคำนวณจาก `waiting` กับ settings และอาจเป็น `LOW`, `MEDIUM`, `HIGH`, `custom_...` หรือ `UNKNOWN`
+ข้อมูลที่ส่งมี `statusColor` และ `statusLabel` เพิ่มด้วย โดย `UNKNOWN` ใช้สี `#64748b` และชื่อที่ไม่ได้ override อาจเป็นข้อความว่างให้ client แปลเอง
+
+User Web โหลด `GET /api/public-data` แล้วรับ `public.updated` เพื่ออัปเดตค่า ส่วน metadata/geometry ใช้ `catalogVersion` และ `routesVersion` ดู [protocol และ fallback](REALTIME.md#จำนวนคนรอและ-cache-เส้นทาง)

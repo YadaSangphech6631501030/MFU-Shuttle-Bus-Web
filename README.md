@@ -150,6 +150,11 @@ npm run preview
 
 ถ้าทดสอบจากมือถือหรือเครื่องอื่น ให้เปลี่ยน `VITE_API_BASE_URL` จาก `localhost` เป็น IP หรือ domain ของเครื่องที่รัน Backend
 
+## การตั้งค่าสถานะสถานี
+
+Admin Web มีเมนู Settings สำหรับแก้ชื่อสถานะ สี/รหัส HEX และช่วงจำนวนคน รวมถึงเพิ่มสถานะ โดยใช้ค่าร่วมกันทุกสถานี เก็บใน MongoDB collection `settings`
+ดูขั้นตอนการแก้ไข บันทึก และข้อจำกัดปัจจุบันใน [คู่มือ Admin Settings](docs/HANDBOOK.md#37-admin-settings)
+
 ## Supabase Realtime Setup
 
 ข้อมูลรถยังเก็บใน MongoDB และ Node Backend เป็นผู้ดึง GPS แล้วส่งข้อมูลไป Supabase
@@ -159,8 +164,10 @@ npm run preview
 3. เปิด `backend-node/sql/realtime.sql` แล้วนำไปรันใน Supabase SQL Editor ครั้งแรก
 4. รีสตาร์ต Backend และ Vite หลังแก้ `.env`
 
-ช่อง Realtime ที่ใช้คือ `mfu-buses` และ event คือ `buses.updated`
+ช่อง Realtime แบบ private ที่ใช้คือ `mfu-buses`: รถใช้ event `buses.updated` และข้อมูลจำนวนคน/สถานะสถานีของ User Web ใช้ `public.updated`
 เว็บจะโหลดข้อมูลเริ่มต้นจาก `/api/buses/snapshot` แล้วรับข้อมูลใหม่ผ่าน WebSocket
+User Web โหลดสถานีและเส้นทางครั้งแรกผ่าน `/api/public-data` แล้วรับจำนวนคน สี และชื่อสถานะที่เปลี่ยนผ่าน Realtime โดยใช้ version เพื่อไม่โหลด geometry ซ้ำโดยไม่จำเป็น
+Admin Web ยังโหลดข้อมูลสถานีผ่าน API เดิม; รายงานและ detector ไม่ได้เปลี่ยนเป็น Broadcast
 ถ้า Realtime หลุด ระบบจะกลับไปใช้ API fallback อัตโนมัติ
 
 อ่านรายละเอียด protocol, สิทธิ์ และวิธีตรวจสอบได้ที่ [docs/REALTIME.md](docs/REALTIME.md)
@@ -224,6 +231,8 @@ Backend แบ่ง route หลักตามนี้:
 - `/auth` - Login, JWT authentication และการจัดการบัญชี
 - `/station` - ข้อมูลสถานีและการจัดการสถานี
 - `/api/routes` - ข้อมูลเส้นทางและการจัดการเส้นทาง
+- `/api/public-data` - snapshot สถานี จำนวนคน และเส้นทางแบบมี version สำหรับ User Web
+- `/api/settings/crowd-thresholds` - GET/PUT การตั้งค่าสถานะ ใช้ JWT ของ Admin
 - `/api/buses` - ข้อมูลรถในรูปแบบ array
 - `/api/buses/snapshot` - snapshot รถสำหรับ initial load และ Realtime fallback
 - `/api/buses/gps-status` - สถานะ GPS และ Supabase สำหรับ Admin

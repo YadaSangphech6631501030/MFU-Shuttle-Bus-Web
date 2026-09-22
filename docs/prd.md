@@ -214,3 +214,15 @@ docker compose up -d --build
 - `docker-compose.yml` build/run ได้
 - โปรเจกต์อยู่ใน Git/GitHub
 - รูปเล่มบทที่ 1-5 จัดทำแยกตาม template มหาวิทยาลัย
+
+## Admin Crowd Settings And Public Realtime
+
+- Admin แก้ชื่อ สี/HEX และช่วงจำนวนคนของสถานะผ่าน Settings และเพิ่มสถานะได้ ค่ามีผลร่วมกันทุกสถานี
+- GET/PUT `/api/settings/crowd-thresholds` ต้องใช้ Admin JWT; ไม่มีสิทธิ์ต้องไม่อ่านหรือแก้ค่าผ่าน endpoint นี้ได้
+- ชื่อซ้ำ สีผิดรูปแบบ ช่วงทับกัน หรือมีช่วงไม่จำกัดก่อนแถวสุดท้ายต้องไม่ถูกบันทึก
+- บันทึกแล้วรีโหลดต้องได้ค่าจาก MongoDB; Cancel ไม่เปลี่ยนค่าที่บันทึกไว้
+- สถานะสาธารณะคำนวณจากจำนวนคน รองรับ custom ID และ UNKNOWN นอกช่วง โดยไม่เปลี่ยน validation LOW/MEDIUM/HIGH ของ station CRUD เดิม
+- User Web โหลด `/api/public-data` ครั้งแรก รับ `public.updated` และใช้ HTTP resync เมื่อ reconnect/ข้อมูลขาดลำดับ; การเปลี่ยนเฉพาะจำนวนคน สี หรือชื่อสถานะไม่ควรสร้างแผนที่ใหม่
+- Admin Web ยังใช้ API สถานีเดิม; รายงานและ detector ไม่ได้ย้ายไป Broadcast
+
+ข้อจำกัดที่ยังต้องตรวจรับ: UI อนุญาตลบแถวหลัก แต่ API ยังต้องมีสามช่วงหลัก และ UI กำหนด To > From ขณะที่ API อนุญาต To = From ดู [คู่มือ Settings](HANDBOOK.md#37-admin-settings)

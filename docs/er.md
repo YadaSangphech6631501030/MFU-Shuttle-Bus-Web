@@ -8,11 +8,37 @@
 - `stations`
 - `buses`
 - `reports`
+- `routes`
+- `settings`
 
 ## 2. Logical ER Diagram
 
 ```mermaid
 erDiagram
+  SETTINGS {
+    string _id
+    object low
+    object medium
+    object high
+    object colors
+    object names
+    array customStatuses
+    Date updatedAt
+  }
+
+  ROUTES {
+    ObjectId _id
+    string id
+    string name
+    string nameTH
+    string color
+    boolean enabled
+    object geometry
+    number revision
+    Date createdAt
+    Date updatedAt
+  }
+
   USERS {
     ObjectId _id
     string username
@@ -56,6 +82,8 @@ erDiagram
     number feedbackAverage
   }
 
+  SETTINGS ||--o{ STATIONS : "shared crowd classification rules"
+  ROUTES }o--o{ STATIONS : "route id in station lines"
   USERS ||--o{ REPORTS : "future optional userId"
   STATIONS ||--o{ BUSES : "line/currentStationIndex maps to station order"
   STATIONS ||--o{ REPORTS : "location text may reference station"
@@ -137,13 +165,21 @@ Indexes ถูกสร้างจาก `docker/mongo-init/001-import-backup.s
 ## 6. Data Flow Diagram
 
 ```text
-Passenger App
-  -> /station/:line
-  -> stations
+Passenger Web initial load / resync
+  -> /api/public-data -> shared cache -> stations + routes + settings
+  -> /api/buses/snapshot -> GPS snapshot cache
 
-Passenger App
-  -> /api/buses
-  -> buses
+Node Backend -> Supabase private Broadcast (mfu-buses)
+  -> buses.updated -> Passenger Web + Admin Web
+  -> public.updated -> Passenger Web station counts/status
+
+Admin Settings
+  -> GET/PUT /api/settings/crowd-thresholds (Admin JWT)
+  -> settings (_id: crowd-thresholds)
+
+Legacy public station/bus APIs remain available:
+  /station/:line -> stations + settings
+  /api/buses -> bus feed
 
 Passenger App
   -> /api/report
@@ -165,5 +201,10 @@ Admin Web
 
 ## 7. Notes For Report Book
 
-ถ้าต้องแปลงเป็น ER Diagram ในรูปเล่มบทที่ 3 สามารถอธิบายว่า MongoDB เป็น document database และใช้ logical relationship แทน foreign key โดย collections หลักคือ `users`, `stations`, `buses`, `reports`
+ถ้าต้องแปลงเป็น ER Diagram ในรูปเล่มบทที่ 3 สามารถอธิบายว่า MongoDB เป็น document database และใช้ logical relationship แทน foreign key โดย collections หลักคือ `users`, `stations`, `buses`, `reports`, `routes`, `settings`
 
+### ความสัมพันธ์ Settings และ Routes
+
+`settings` เป็นกฎร่วมสำหรับคำนวณสถานะจาก `stations.waiting` ไม่ได้ผูก foreign key กับแต่ละสถานี ส่วน `stations.lines` อ้างถึง `routes.id` แบบ logical mapping
+`routes.geometry` เป็น GeoJSON LineString จุดเรียง `[longitude, latitude]`; มี unique index ของ `routes.id` สร้างใน `services/routes.js`
+Supabase Broadcast เป็นช่องส่งข้อมูล ไม่ใช่ฐานข้อมูลหลักหรือที่เก็บประวัติของ collections เหล่านี้
