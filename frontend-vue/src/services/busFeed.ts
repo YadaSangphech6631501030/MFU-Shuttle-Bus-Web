@@ -13,6 +13,8 @@ type Options<T> = {
   loadSnapshot: (signal: AbortSignal) => Promise<unknown>
   onBuses: (buses: T[]) => void
   onError?: () => void
+  onPublicUpdate?: (payload: unknown) => void
+  onConnectionChange?: (connected: boolean) => void
   now?: () => number
   schedule?: (callback: () => void, ms: number) => () => void
 }
@@ -87,7 +89,10 @@ export function startBusFeed<T>(options: Options<T>) {
   }
 
   const channel = options.client?.channel('mfu-buses', { config: { private: true } })
-    .on('broadcast', { event: 'buses.updated' }, ({ payload }) => {
+  if (options.onPublicUpdate) channel?.on('broadcast', { event: 'public.updated' }, ({ payload }) => {
+    if (!stopped) options.onPublicUpdate?.(payload)
+  })
+  channel?.on('broadcast', { event: 'buses.updated' }, ({ payload }) => {
       if (stopped || !isBusSnapshot<T>(payload) || retired.has(payload.streamId)) return
       lastEventAt = now()
       if (lastSnapshot?.streamId === payload.streamId) {
@@ -101,6 +106,7 @@ export function startBusFeed<T>(options: Options<T>) {
     .subscribe(status => {
       if (stopped) return
       connected = status === 'SUBSCRIBED'
+      options.onConnectionChange?.(connected)
       if (connected) {
         // Fill gaps on the initial join and every subsequent reconnect.
         if (active) resyncNeeded = true

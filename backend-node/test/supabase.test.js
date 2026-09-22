@@ -4,6 +4,17 @@ const { createBusPublisher } = require('../services/supabase');
 
 const config = { url: 'https://example.supabase.co', secret: 'sb_secret_test' };
 
+test('crowd deltas use a separate event on the existing private channel', async () => {
+  const payload = { schemaVersion: 1, stations: [{ id: 'a', waiting: 3 }] };
+  const publisher = createBusPublisher({ ...config, event: 'public.updated', fetchImpl: async (url, options) => {
+    assert.equal(url.pathname, '/realtime/v1/api/broadcast/mfu-buses/events/public.updated');
+    assert.equal(url.searchParams.get('private'), 'true');
+    assert.deepEqual(JSON.parse(options.body), payload);
+    return new Response(null, { status: 202 });
+  } });
+  assert.deepEqual(await publisher.publishSnapshot(() => payload), { ok: true });
+});
+
 test('sends one private snapshot with server credentials, without credentials in payload', async () => {
   const buses = [{ busId: 'MFU01', lat: 20, lng: 99 }];
   const publisher = createBusPublisher({ ...config, fetchImpl: async (url, options) => {

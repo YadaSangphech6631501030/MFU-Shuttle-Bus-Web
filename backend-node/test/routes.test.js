@@ -60,9 +60,17 @@ test('routes persist safely and support additional lines throughout the API', as
     const saved = await db.collection('routes').findOne({ id: 'line3' });
     assert.deepEqual(saved.geometry, edit.geometry);
     assert.equal(saved.revision, 2);
-    const station = { id: 'test-stop', name: 'New stop', lat: 20.04, lng: 99.89, lines: ['line3'] };
+    const station = { id: 'test-stop', name: 'New stop', lat: 20.04, lng: 99.89, lines: ['line3'], routeBearings: { line3: 90 } };
     assert.equal((await request('/station/admin', 'POST', station, admin)).status, 201);
     assert.equal((await (await request('/station/line3')).json()).length, 1);
+    assert.deepEqual((await (await request('/station/line3')).json())[0].routeBearings, { line3: 90 });
+    assert.equal((await request('/station/admin/test-stop', 'PUT', { routeBearings: { line1: 90 } }, admin)).status, 400);
+    assert.equal((await request('/station/admin/test-stop', 'PUT', { routeBearings: { line3: 270 } }, admin)).status, 200);
+    assert.deepEqual((await (await request('/station/line3')).json())[0].routeBearings, { line3: 270 });
+    assert.equal((await request('/station/admin/test-stop', 'PUT', { name: 'Renamed stop' }, admin)).status, 200);
+    assert.deepEqual((await (await request('/station/line3')).json())[0].routeBearings, { line3: 270 });
+    assert.equal((await request('/station/admin/test-stop', 'PUT', { routeBearings: null }, admin)).status, 200);
+    assert.deepEqual((await (await request('/station/line3')).json())[0].routeBearings, {});
     assert.equal((await request('/station/admin/test-stop', 'PUT', { lines: ['unknown'] }, admin)).status, 400);
     assert.equal((await request('/api/routes/line3', 'PUT', { ...saved, enabled: false }, admin)).status, 200);
     assert.equal((await (await request('/api/routes')).json()).some(item => item.id === 'line3'), false);

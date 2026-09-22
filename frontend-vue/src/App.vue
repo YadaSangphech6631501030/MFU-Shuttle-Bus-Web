@@ -4,15 +4,14 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { api, type Bus, type ShuttleRoute, type Station } from './services/api';
 import { supabase } from './services/supabase';
 import { startBusFeed } from './services/busFeed';
+import { startPublicDataFeed, type Catalog, type Crowd } from './services/publicDataFeed';
 import { arrivalUnavailableReason, canEstimateArrival, gpsAgeMs, lastKnownPosition, interpolatePosition, holdStoppedPosition, ETA_MAX_AGE_MS } from './liveGps';
 import { estimateRouteArrival, routeProgressAtPosition, routeBearingAtPosition, angleDifference } from './arrival';
 import { createGpsMotionEstimator } from './gpsMotion';
 import { arrivalStatusText, tripTimeText } from './arrivalDisplay';
-import { distanceMeters, findRide, findBoardingStop, type BoardingSuggestion } from './routePlanning';
+import { distanceMeters, pathDistanceMeters, createRoutePlanner, BUS_SPEED_METERS_PER_SECOND, type AlightingSuggestion, type BoardingSuggestion } from './routePlanning';
 import busLeftUrl from '../assets/gemcar_left.png';
 import busRightUrl from '../assets/gemcar_right.png';
-import busTurnLeftUrl from '../assets/gemcar_turnleft.png';
-import busTurnRightUrl from '../assets/gemcar_turnright.png';
 import busIconUrl from '../assets/bus.png';
 import busStopUrl from '../assets/bus_stop_2.png';
 import TransitPage from './pages/TransitPage.vue';
@@ -26,7 +25,7 @@ type Page = 'home' | 'transit' | 'favorites' | 'report' | 'settings' | 'language
 type Line = string;
 type RoutePoint = { lat: number; lng: number };
 type MapViewport = { center: RoutePoint; zoom: number };
-type BusMarkerEntry = { marker: any; key: string; position: RoutePoint; bearing: number | null; line: Line; turnReady: boolean; turnTimer?: number; animationFrame?: number; lastGpsAt?: string | null; lastMovement?: string };
+type BusMarkerEntry = { marker: any; key: string; position: RoutePoint; bearing: number | null; line: Line; animationFrame?: number; lastGpsAt?: string | null; lastMovement?: string };
 const gpsNow = ref(Date.now());
 const estimateGpsMotion = createGpsMotionEstimator();
 let gpsClockTimer: number | undefined;
@@ -72,6 +71,8 @@ const isFeedbackSubmitting = ref(false);
 const mapElement = ref<HTMLElement | null>(null);
 const selectedRouteAvailable = ref(false);
 const selectedRideLine = ref<string | null>(null);
+const selectedRideDistance = ref(0);
+const alightingSuggestion = ref<AlightingSuggestion | null>(null);
 const boardingSuggestion = ref<BoardingSuggestion | null>(null);
 const routePlanReady = ref(false);
 const userLocation = ref<RoutePoint | null>(null);
@@ -401,14 +402,8 @@ function busRouteBearing(bus: Bus, position: RoutePoint, paths: Map<Line, RouteP
 function busIconForDirection(directionRaw: number | null | undefined) {
   if (!Number.isFinite(directionRaw)) return busRightUrl;
   const direction = ((Number(directionRaw) % 360) + 360) % 360;
-  // The animation intentionally uses only the left and right side assets.
+  // Show the left or right side directly for the current travel direction.
   return direction < 90 || direction >= 270 ? busRightUrl : busLeftUrl;
-}
-
-function busTurnIcon(currentBearing: number, targetBearing: number) {
-  const turn = ((targetBearing - currentBearing + 540) % 360) - 180;
-  if (Math.abs(turn) < 20 || Math.abs(turn) >= 150) return null;
-  return turn > 0 ? busTurnRightUrl : busTurnLeftUrl;
 }
 
 function busTravelBearing(bus: Bus, position: RoutePoint): number | null {
@@ -422,39 +417,22 @@ function setBusMarkerIcon(marker: any, url: string) {
 }
 
 function clearBusMarkers() {
-  busMarkers.forEach(({ marker, turnTimer, animationFrame }) => {
-    if (turnTimer !== undefined) window.clearTimeout(turnTimer);
+  busMarkers.forEach(({ marker, animationFrame }) => {
     if (animationFrame !== undefined) cancelAnimationFrame(animationFrame);
     marker.setMap(null);
   });
   busMarkers = [];
 }
 
-function updateBusTurn(entry: BusMarkerEntry, bus: Bus, position: RoutePoint) {
-  // Ignore stationary GPS jitter. A straight segment rearms the next brief turn animation.
+function updateBusDirection(entry: BusMarkerEntry, bus: Bus, position: RoutePoint) {
+  // Ignore stationary GPS jitter while updating the side icon immediately on movement.
   const line = nearestBusLine(bus, position);
   if (distanceMeters(entry.position, position) < 3 && line === entry.line) return;
   const bearing = busTravelBearing(bus, position);
-  const previous = entry.bearing;
-  const sameLine = line === entry.line;
   entry.bearing = bearing;
   entry.line = line;
   entry.position = position;
-  if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
-  entry.turnTimer = undefined;
-  const sideIcon = busIconForDirection(bearing);
-  const turnIcon = sameLine && previous !== null && bearing !== null ? busTurnIcon(previous, bearing) : null;
-  if (turnIcon && entry.turnReady) {
-    entry.turnReady = false;
-    setBusMarkerIcon(entry.marker, turnIcon);
-    entry.turnTimer = window.setTimeout(() => {
-      setBusMarkerIcon(entry.marker, sideIcon);
-      entry.turnTimer = undefined;
-    }, 900);
-  } else {
-    setBusMarkerIcon(entry.marker, sideIcon);
-    if (!sameLine || previous === null || bearing === null || angleDifference(previous, bearing) < 10) entry.turnReady = true;
-  }
+  setBusMarkerIcon(entry.marker, busIconForDirection(bearing));
 }
 
 function closeBusPopup() {
@@ -576,7 +554,7 @@ function renderBusMarkers(paths = routePathCache) {
 function createBusMarker(bus: Bus, position: RoutePoint): BusMarkerEntry {
     const marker = new window.google.maps.Marker({ position, map: campusMap, title: bus.name || bus.busId || 'MFU Shuttle Bus', zIndex: 20, opacity: busPositionIsRecent(bus) ? 1 : 0.5,
       icon: { url: busIconForDirection(busTravelBearing(bus, position)), scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 36) } });
-    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position, bearing: busTravelBearing(bus, position), line: nearestBusLine(bus, position), turnReady: true, lastGpsAt: bus.lastGpsAt, lastMovement: bus.status };
+    const entry: BusMarkerEntry = { marker, key: bus.busId || bus.busNumber || bus.name || `${position.lat}:${position.lng}`, position, bearing: busTravelBearing(bus, position), line: nearestBusLine(bus, position), lastGpsAt: bus.lastGpsAt, lastMovement: bus.status };
     marker.addListener('click', () => {
       const currentPosition = entry.marker.getPosition?.();
       toggleBusPopup(
@@ -600,7 +578,6 @@ function updateLiveBusMarkers() {
   busMarkers.forEach(entry => {
     if (nextKeys.includes(entry.key)) return;
     if (entry.animationFrame !== undefined) cancelAnimationFrame(entry.animationFrame);
-    if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
     entry.marker.setMap(null);
     if (busOverlayKey === entry.key) closeBusPopup();
   });
@@ -625,9 +602,6 @@ function updateLiveBusMarkers() {
     }
     const from = { lat: markerPosition.lat(), lng: markerPosition.lng() };
     if (bus.status !== 'RUNNING') {
-      if (entry.turnTimer !== undefined) window.clearTimeout(entry.turnTimer);
-      entry.turnTimer = undefined;
-      entry.turnReady = true;
       setBusMarkerIcon(entry.marker, busIconForDirection(entry.bearing));
       if (holdStoppedPosition(previousMovement, bus, distanceMeters(entry.position, position))) return;
       // Accept the final stop fix or a substantial correction immediately, without simulating driving.
@@ -635,7 +609,7 @@ function updateLiveBusMarkers() {
       entry.marker.setPosition(position);
       return;
     }
-    updateBusTurn(entry, bus, position);
+    updateBusDirection(entry, bus, position);
     entry.position = position;
     // Only interpolate nearby, recent measured points. Never project movement beyond the GPS fix.
     const gap = Date.parse(bus.lastGpsAt || '') - Date.parse(previousGpsAt || '');
@@ -794,44 +768,36 @@ const tripEstimate = computed(() => {
   if (!from || !to) return null;
   const line = selectedRideLine.value;
   if (!line || !selectedRouteAvailable.value) return { available: false as const };
-  const rideMinutes = Math.max(1, Math.ceil(distanceMeters(from, to) / 8.33 / 60));
+  const rideMinutes = Math.max(1, Math.ceil(selectedRideDistance.value / BUS_SPEED_METERS_PER_SECOND / 60));
   const arrivalMinutes = stationArrivalMinutesForLine(from, line);
   const text = tripTimeText(arrivalMinutes, rideMinutes, arrivalReasonForLines([line]), lang.value);
   return { available: true as const, arrivalMinutes, rideMinutes, arrivalText: text.arrival, totalText: text.total };
 });
 
-const originAllowedDestinations: Record<string, Set<string>> = {
-  station15: new Set(['station18', 'station19', 'station17', 'station20', 'station10', 'station13']),
-  station01: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => id !== 'station19')),
-  station07: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => !['station06', 'station16'].includes(id))),
-  station21: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => !['station19', 'station18'].includes(id))),
-  station09: new Set(['station15', 'station17', 'station20', 'station11', 'station05', 'station12', 'station10', 'station13', 'station14']),
-  station11: new Set(['station10', 'station13', 'station12', 'station14', 'station05', 'station15', 'station06', 'station18', 'station19', 'station21', 'station17', 'station20']),
-  station05: new Set(['station18', 'station19', 'station21', 'station17', 'station20']),
-  station16: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => id !== 'station02')),
-  station12: new Set(['station14', 'station06', 'station15', 'station05', 'station19', 'station17', 'station20', 'station21', 'station01', 'station18']),
-  station08: new Set([...Array.from({ length: 22 }, (_, index) => `station${String(index + 1).padStart(2, '0')}`)].filter((id) => !['station02', 'station16', 'station07'].includes(id))),
-  station14: new Set(['station18', 'station06', 'station15', 'station05', 'station19', 'station01', 'station21', 'station17', 'station20']),
-  station10: new Set(['station11', 'station12', 'station13', 'station14', 'station18', 'station21', 'station17', 'station20', 'station01', 'station19', 'station06', 'station15', 'station05']),
-  station13: new Set(['station14', 'station06', 'station15', 'station05', 'station18', 'station19', 'station01', 'station17', 'station20', 'station21']),
-};
-const originsThatCanReachEverywhere = new Set(['station17', 'station20']);
-const blockedDestinationIds = new Set(['station15']);
-const explicitlyBlockedRoutes = new Set(['station21:station18', 'station21:station19', 'station18:station21', 'station18:station19', 'station18:station14', 'station18:station05', 'station18:station06', 'station18:station19', 'station18:station01', 'station18:station21', 'station18:station17', 'station18:station20', 'station19:station18', 'station19:station14', 'station07:station06', 'station07:station16', 'station01:station19', 'station01:station14', 'station10:station09', 'station13:station09', 'station14:station09', 'station11:station09', 'station05:station09', 'station05:station14', 'station12:station09', 'station11:station10', 'station13:station11', 'station12:station11', 'station14:station11', 'station05:station11', 'station15:station11', 'station06:station11', 'station06:station14', 'station18:station11', 'station14:station12', 'station05:station12', 'station19:station12', 'station19:station14', 'station18:station12', 'station13:station10', 'station12:station10', 'station14:station10', 'station18:station10', 'station19:station10', 'station01:station10', 'station06:station10', 'station05:station10', 'station14:station13', 'station06:station13', 'station05:station13', 'station18:station13', 'station19:station13', 'station01:station13']);
-
 function peopleText(value = 0) { 
   return lang.value === 'th' ? `${value} คน` : `${value} people`; 
 }
 
-// Resolve current translations and round proximity up to 10 m for the recommendation.
+// Show approximate proximity to the nearest metre without inflating short walks.
 const boardingDetails = computed(() => {
   const suggestion = boardingSuggestion.value;
+  if (!suggestion) return null;
+  const station = stations.value.find((item) => item.id === suggestion.stationId);
+  const destination = stations.value.find((item) => item.id === selectedToId.value);
+  const route = availableRoutes.value.find((item) => item.id === suggestion.line);
+  if (!station || !destination || !route) return null;
+  return { station: stationName(station), destination: stationName(destination),
+    line: lang.value === 'th' ? route.nameTH || route.name : route.name, meters: Math.round(suggestion.distanceMeters) };
+});
+
+const alightingDetails = computed(() => {
+  const suggestion = alightingSuggestion.value;
   if (!suggestion) return null;
   const station = stations.value.find((item) => item.id === suggestion.stationId);
   const route = availableRoutes.value.find((item) => item.id === suggestion.line);
   if (!station || !route) return null;
   return { station: stationName(station), line: lang.value === 'th' ? route.nameTH || route.name : route.name,
-    meters: Math.ceil(suggestion.distanceMeters / 10) * 10 };
+    meters: Math.round(suggestion.distanceMeters) };
 });
 
 function minuteText(value: number | null) {
@@ -897,7 +863,7 @@ function bindStationPopupActions(element: HTMLElement, station: Station) {
 }
 
 function refreshStationPopup() {
-  const station = stationDetail.value;
+  const station = stations.value.find(item => item.id === stationDetail.value?.id);
   const element = stationOverlay?.element as HTMLElement | undefined;
   if (!station || !element) return;
   element.innerHTML = stationPopupHtml(station);
@@ -953,11 +919,12 @@ async function loadRoute(line: Line) {
     const geojson = await response.json(); const coordinates = geojson.features?.flatMap((feature: any) => feature.geometry?.coordinates || []) || geojson.geometry?.coordinates || []; 
     return coordinates.map(([lng, lat]: number[]) => ({ lat, lng })); } 
     catch { 
-      return lineStations(line).map(({ lat, lng }) => ({ lat, lng })); 
+      // Station ID order is not a road or a direction; wait for real geometry.
+      return [];
   } 
 }
 async function renderGoogleMap() {
-  if (!campusMap || !window.google?.maps || !stations.value.length || !mapElement.value) return;
+  if (!campusMap || !window.google?.maps || !mapElement.value) return;
   if (campusMap.getDiv?.() !== mapElement.value) return;
   const generation = ++mapRenderGeneration;
   const lineSelection = selectedLine.value;
@@ -969,6 +936,7 @@ async function renderGoogleMap() {
   const routePaths = new Map<Line, RoutePoint[]>();
   selectedRouteAvailable.value = false;
   selectedRideLine.value = null;
+  alightingSuggestion.value = null;
   boardingSuggestion.value = null;
   routePlanReady.value = false;
 
@@ -992,23 +960,26 @@ async function renderGoogleMap() {
     }
   }
 
-  // Both the summary and suggested boarding stop use the same direction checks.
-  const directionRules = { allowed: originAllowedDestinations, everywhere: originsThatCanReachEverywhere,
-    blockedDestinations: blockedDestinationIds, blockedPairs: explicitlyBlockedRoutes };
-  const ride = selectedFrom && selectedTo ? findRide(selectedFrom, selectedTo, routePaths, directionRules) : null;
-  selectedRouteAvailable.value = ride !== null;
+  // Recompute stop positions from the latest API data and the ordered route geometry.
+  const planner = createRoutePlanner(stations.value, routePaths);
+  const trip = selectedFrom && selectedTo
+    ? planner.plan(selectedFrom.id, selectedTo.id, lineSelection === 'all' ? 'line1' : undefined) : null;
+  boardingSuggestion.value = selectedFrom && selectedTo && !trip?.ride && !trip?.alighting
+    ? planner.boarding(selectedFrom.id, selectedTo.id, lineSelection === 'all' ? 'line1' : undefined) : null;
+  const ride = boardingSuggestion.value || trip?.ride || null;
+  alightingSuggestion.value = boardingSuggestion.value?.alighting || trip?.alighting || null;
+  selectedRouteAvailable.value = ride !== null && !alightingSuggestion.value && !boardingSuggestion.value;
   selectedRideLine.value = ride?.line || null;
-  if (selectedFrom && selectedTo && !ride) {
-    boardingSuggestion.value = findBoardingStop(selectedFrom, selectedTo, stations.value, routePaths, directionRules);
-  }
+  selectedRideDistance.value = ride ? pathDistanceMeters(ride.path) : 0;
   routePlanReady.value = true;
   const stationList = selectedFrom && selectedTo
-    ? stations.value.filter((station) => station.id === selectedFrom.id || station.id === selectedTo.id || station.id === boardingSuggestion.value?.stationId)
+    ? stations.value.filter((station) => station.id === selectedFrom.id || station.id === selectedTo.id
+      || station.id === alightingSuggestion.value?.stationId || station.id === boardingSuggestion.value?.stationId)
     : stations.value.filter((station) => lineSelection === 'all' || station.lines?.includes(lineSelection));
   stationList.forEach((station) => { points.push({ lat: station.lat, lng: station.lng }); const marker = new window.google.maps.Marker({ position: { lat: station.lat, lng: station.lng }, map: campusMap, title: stationName(station), icon: { url: busStopUrl, scaledSize: new window.google.maps.Size(58, 58), anchor: new window.google.maps.Point(29, 50) } }); marker.set('stationId', station.id); marker.addListener('click', () => toggleStationPopup(station)); mapMarkers.push(marker); });
   points.push(...renderBusMarkers(routePaths));
-  // An alternative ride starts at the recommended stop; do not draw a bus connection from the original origin.
-  const displayedRide = ride || boardingSuggestion.value;
+  // The suggested ride ends at the alighting stop; walking is not a bus segment.
+  const displayedRide = alightingSuggestion.value || ride;
   if (displayedRide) {
       mapPolylines.push(new window.google.maps.Polyline({
         path: displayedRide.path,
@@ -1133,17 +1104,9 @@ async function ensureHomeMap() {
   await renderGoogleMap();
 }
 let busFeed: ReturnType<typeof startBusFeed<Bus>> | undefined;
-let publicDataTimer: number | undefined;
-let publicDataRequestActive = false;
-
-function combinePublicStations(stationLists: Station[][]) {
-  const stationMap = new Map<string, Station>();
-  stationLists.flat().forEach((station) => {
-    const old = stationMap.get(station.id);
-    stationMap.set(station.id, { ...old, ...station, lines: Array.from(new Set([...(old?.lines || []), ...(station.lines || [])])) } as Station);
-  });
-  return [...stationMap.values()].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
-}
+let publicDataFeed: ReturnType<typeof startPublicDataFeed> | undefined;
+const stationCatalogVersion = ref('');
+let loadedRoutesVersion = '';
 
 function routeIdsForData(routeList: ShuttleRoute[] | null) {
   if (routeList === null) return ['line1', 'line2'];
@@ -1158,12 +1121,33 @@ function syncRouteControls(routeList: ShuttleRoute[] | null) {
   if (selectedLine.value !== 'all' && !routeIdsForData(routeList).includes(selectedLine.value)) selectedLine.value = 'all';
 }
 
-function publicDataSignature(nextStations: Station[], nextRoutes: ShuttleRoute[]) {
-  // Include statusColor so a color-only settings update also refreshes station popups.
-  return JSON.stringify({
-    stations: nextStations.map(({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor, statusLabel }) => ({ id, name, nameTH, lat, lng, lines, waiting, status, statusColor, statusLabel })),
-    routes: nextRoutes.map(({ id, name, nameTH, color, enabled, geometry, revision, updatedAt }) => ({ id, name, nameTH, color, enabled, geometry, revision, updatedAt })),
-  });
+function receiveCatalog(catalog: Catalog) {
+  stations.value = [...catalog.stations].sort((a, b) => a.id.localeCompare(b.id, undefined, { numeric: true }));
+  if (selectedFromId.value && !stations.value.some(station => station.id === selectedFromId.value)) clearStation('from');
+  if (selectedToId.value && !stations.value.some(station => station.id === selectedToId.value)) clearStation('to');
+  refreshStationLanguage();
+  if (loadedRoutesVersion !== catalog.routesVersion) {
+    routes.value = catalog.routes;
+    loadedRoutesVersion = catalog.routesVersion;
+    routePathCache.clear();
+  }
+  routesLoaded.value = true;
+  syncRouteControls(catalog.routes);
+  if (stationDetail.value) closeStationPopup();
+  stationCatalogVersion.value = catalog.version;
+  message.value = '';
+}
+
+function receiveCrowds(rows: Crowd[]) {
+  const current = new Map(stations.value.map(station => [station.id, station]));
+  // Preserve marker references. Counts/statuses update the existing views without
+  // rebuilding road geometry, markers, or the selected passenger itinerary.
+  for (const row of rows) {
+    const station = current.get(row.id);
+    if (station) Object.assign(station, { waiting: row.waiting, status: row.status,
+      statusColor: row.statusColor, statusLabel: row.statusLabel });
+  }
+  refreshStationPopup();
 }
 
 function receiveBuses(nextBuses: Bus[]) {
@@ -1174,46 +1158,17 @@ function receiveBuses(nextBuses: Bus[]) {
 }
 
 function refreshBusFeedOnReturn() {
-  if (document.visibilityState === 'visible') void busFeed?.refresh();
-}
-
-async function refreshPublicData() {
-  if (publicDataRequestActive) return;
-  publicDataRequestActive = true;
-  try {
-    const routeList = await api.getRoutes();
-    const nextStations = combinePublicStations(await Promise.all(routeIdsForData(routeList).map((line) => api.getStations(line))));
-    if (publicDataSignature(nextStations, routeList) === publicDataSignatureValue) return;
-
-    // Reload admin changes without a full page refresh. Clearing the route cache makes the map use new geometry.
-    stations.value = nextStations;
-    routes.value = routeList;
-    routesLoaded.value = true;
-    syncRouteControls(routeList);
-    routePathCache.clear();
-    if (stationDetail.value) closeStationPopup();
-    publicDataSignatureValue = publicDataSignature(nextStations, routeList);
-  } catch {
-    // Keep the current station and route data when a background refresh fails.
-  } finally {
-    publicDataRequestActive = false;
+  if (document.visibilityState === 'visible') {
+    void busFeed?.refresh();
+    void publicDataFeed?.refresh();
   }
 }
-
-let publicDataSignatureValue = '';
 
 async function loadData() {
   isLoading.value = true;
   message.value = '';
   try {
-    const routeList = await api.getRoutes().catch(() => null);
-    const stationLists = await Promise.all(routeIdsForData(routeList).map(line => api.getStations(line)));
-    const nextStations = combinePublicStations(stationLists);
-    stations.value = nextStations;
-    routes.value = routeList || [];
-    routesLoaded.value = routeList !== null;
-    syncRouteControls(routeList);
-    publicDataSignatureValue = publicDataSignature(nextStations, routes.value);
+    if (!await publicDataFeed?.refresh()) message.value = t.value.mapLoadFailed;
   } catch (error) {
     message.value = error instanceof Error ? error.message : t.value.mapLoadFailed;
   } finally {
@@ -1227,8 +1182,14 @@ onMounted(async () => {
   window.addEventListener('pagehide', saveMapViewport);
   window.addEventListener('online', refreshBusFeedOnReturn);
   document.addEventListener('visibilitychange', refreshBusFeedOnReturn);
+  publicDataFeed = startPublicDataFeed({
+    loadSnapshot: (catalogVersion, routesVersion, signal) => api.getPublicData(catalogVersion, routesVersion, signal),
+    onCatalog: receiveCatalog, onCrowds: receiveCrowds,
+  });
   busFeed = startBusFeed<Bus>({
     client: supabase, loadSnapshot: signal => api.getBusSnapshot(signal), onBuses: receiveBuses,
+    onPublicUpdate: payload => publicDataFeed?.receive(payload),
+    onConnectionChange: connected => publicDataFeed?.connectionChanged(connected),
   });
   gpsClockTimer = window.setInterval(() => {
     gpsNow.value = Date.now();
@@ -1239,7 +1200,6 @@ onMounted(async () => {
   await loadData();
   await initGoogleMap();
   startUserLocationTracking();
-  publicDataTimer = window.setInterval(() => void refreshPublicData(), 15000);
 });
 onBeforeUnmount(() => {
   document.removeEventListener('click', dismissBusPopupOutsideMap, true);
@@ -1249,19 +1209,20 @@ onBeforeUnmount(() => {
   clearBusMarkers();
   mapResizeObserver?.disconnect();
   busFeed?.stop();
+  publicDataFeed?.stop();
   window.removeEventListener('online', refreshBusFeedOnReturn);
   document.removeEventListener('visibilitychange', refreshBusFeedOnReturn);
   if (gpsClockTimer) window.clearInterval(gpsClockTimer);
-  if (publicDataTimer) window.clearInterval(publicDataTimer);
   if (userLocationWatchId !== undefined) navigator.geolocation?.clearWatch(userLocationWatchId);
   closeUserLocationPopup();
   clearTimeout(successModalTimer);
 });
 watch(page, (next) => { closeBusPopup(); if (next === 'home') void ensureHomeMap(); });
 watch(lang, refreshStationLanguage);
-watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
+watch([selectedLine, stationCatalogVersion, routes, selectedFromId, selectedToId], () => {
   selectedRouteAvailable.value = false;
   selectedRideLine.value = null;
+  alightingSuggestion.value = null;
   boardingSuggestion.value = null;
   routePlanReady.value = false;
   void renderGoogleMap();
@@ -1313,15 +1274,25 @@ watch([selectedLine, stations, routes, selectedFromId, selectedToId], () => {
         <p v-if="!routePlanReady">{{ lang === 'th' ? 'กำลังคำนวณเส้นทาง…' : 'Calculating route…' }}</p>
         <p v-else-if="selectedFromId === selectedToId">{{ lang === 'th' ? 'ต้นทางและปลายทางเป็นสถานีเดียวกัน' : 'Origin and destination are the same station.' }}</p>
         <template v-else>
-          <!-- Show the boarding suggestion or its specific fallback without a duplicate route warning. -->
+          <!-- Keep boarding and alighting advice in the existing summary card. -->
           <div v-if="boardingDetails" class="boarding-suggestion">
             <strong>{{ lang === 'th' ? 'สถานีแนะนำสำหรับขึ้นรถ' : 'Recommended boarding station' }}</strong>
             <p class="boarding-stop">{{ boardingDetails.station }}</p>
             <p>{{ boardingDetails.line }}</p>
             <p>{{ lang === 'th' ? 'ห่างจากต้นทางที่เลือกประมาณ' : 'Approximately' }} <b>{{ boardingDetails.meters }} {{ lang === 'th' ? 'เมตร' : 'm' }}</b>{{ lang === 'th' ? ' (ระยะเส้นตรง)' : ' from selected origin (straight-line)' }}</p>
-            <p>{{ lang === 'th' ? 'แนะนำให้ขึ้นรถจากสถานีนี้เพื่อไปยังปลายทาง' : 'Board the bus at this station to reach your destination.' }}</p>
+            <p v-if="!alightingDetails">{{ lang === 'th' ? 'เดินไปขึ้นรถที่สถานีนี้ แล้วลงที่' : 'Walk to this stop to board, then get off at' }} {{ boardingDetails.destination }}</p>
+            <p v-else>{{ lang === 'th' ? 'เดินไปขึ้นรถที่สถานีนี้ แล้วลงรถตามคำแนะนำด้านล่าง' : 'Walk to this stop to board, then use the alighting recommendation below.' }}</p>
           </div>
-          <p v-else>{{ lang === 'th' ? 'ไม่พบสถานีขึ้นรถที่ไปถึงปลายทางได้ภายในระยะเส้นตรง 500 เมตรจากต้นทางที่เลือก กรุณาลองเปลี่ยนต้นทางหรือสายรถ' : 'No boarding station within 500 m of the selected origin (straight-line) has a route to your destination. Try another origin or bus line.' }}</p>
+          <div v-if="alightingDetails" class="boarding-suggestion">
+            <strong>{{ lang === 'th' ? 'สถานีแนะนำสำหรับลงรถ' : 'Recommended alighting station' }}</strong>
+            <p class="boarding-stop">{{ alightingDetails.station }}</p>
+            <p>{{ alightingDetails.line }}</p>
+            <p>{{ lang === 'th' ? 'ห่างจากปลายทางที่เลือกประมาณ' : 'Approximately' }} <b>{{ alightingDetails.meters }} {{ lang === 'th' ? 'เมตร' : 'm' }}</b>{{ lang === 'th' ? ' (ระยะเส้นตรง)' : ' from selected destination (straight-line)' }}</p>
+            <p>{{ boardingDetails
+              ? (lang === 'th' ? 'ลงรถที่สถานีนี้ แล้วเดินต่อไปยังปลายทาง' : 'Get off here, then walk to your destination.')
+              : (lang === 'th' ? 'ขึ้นรถจากต้นทางเดิม ลงที่สถานีนี้ แล้วเดินต่อไปยังปลายทาง' : 'Board at your selected origin, get off here, then walk to your destination.') }}</p>
+          </div>
+          <p v-if="!boardingDetails && !alightingDetails">{{ lang === 'th' ? 'ไม่พบคำแนะนำสถานีขึ้น–ลงรถที่เหมาะสมภายในระยะเส้นตรง 500 เมตรจากต้นทางและปลายทางที่เลือก กรุณาลองเปลี่ยนสถานีหรือสายรถ' : 'No suitable boarding or alighting recommendation within 500 m of the selected origin and destination (straight-line). Try another station or bus line.' }}</p>
         </template>
       </div></div>
 

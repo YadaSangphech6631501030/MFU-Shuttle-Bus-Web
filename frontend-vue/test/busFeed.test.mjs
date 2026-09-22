@@ -4,6 +4,25 @@ import { startBusFeed as passengerFeed } from '../src/services/busFeed.ts'
 import { startBusFeed as adminFeed } from '../../admin-web/src/services/busFeed.ts'
 
 const flush = () => new Promise(resolve => setImmediate(resolve))
+
+test('passenger multiplexes crowd and GPS events on one channel without cross-delivery', async () => {
+  const events = new Map(), crowds = [], buses = [], statuses = []
+  let status, channels = 0, removed = 0
+  const channel = { on(_type, filter, callback) { events.set(filter.event, callback); return this },
+    subscribe(callback) { status = callback; return this } }
+  const feed = passengerFeed({ client: { channel() { channels++; return channel }, async removeChannel() { removed++ } },
+    loadSnapshot: async () => snapshot(1), onBuses: rows => buses.push(rows),
+    onPublicUpdate: payload => crowds.push(payload), onConnectionChange: value => statuses.push(value),
+    schedule() { return () => {} } })
+  await flush()
+  events.get('public.updated')({ payload: { count: 3 } })
+  events.get('buses.updated')({ payload: snapshot(2) })
+  status('SUBSCRIBED'); await flush()
+  assert.equal(channels, 1); assert.deepEqual(crowds, [{ count: 3 }]); assert.equal(buses.at(-1)[0].lat, 2)
+  assert.deepEqual(statuses, [true]); feed.stop()
+  events.get('public.updated')({ payload: { count: 9 } })
+  assert.equal(crowds.length, 1); assert.equal(removed, 1)
+})
 const snapshot = (sequence, streamId = 'a') => ({
   schemaVersion: 1, streamId, sequence, capturedAt: new Date().toISOString(),
   buses: [{ busId: 'MFU01', lat: sequence, lng: 99 }],
