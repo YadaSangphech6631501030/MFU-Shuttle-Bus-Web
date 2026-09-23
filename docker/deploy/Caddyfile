@@ -1,0 +1,11 @@
+{$USER_DOMAIN} {
+    reverse_proxy user-web:80
+}
+
+{$ADMIN_DOMAIN} {
+    reverse_proxy admin-web:80
+}
+
+{$API_DOMAIN} {
+    reverse_proxy backend:5101
+}

@@ -2,6 +2,8 @@
 
 อัปเดตตาม `docker-compose.yml` วันที่ 22 กันยายน 2026 ทั้ง Admin และ Passenger เป็น Vue/Vite
 
+สำหรับเซิร์ฟเวอร์ที่เปิดให้คนอื่นใช้งาน อ่าน [คู่มือ Deploy](DEPLOY.md) และใช้ `docker-compose.deploy.yml` ร่วมด้วย ไฟล์ Compose ปกติในหน้านี้ใช้สำหรับ local/demo
+
 ## เตรียมก่อนรัน
 
 1. ติดตั้งและเปิด Docker Desktop หรือ Docker Engine พร้อม Compose

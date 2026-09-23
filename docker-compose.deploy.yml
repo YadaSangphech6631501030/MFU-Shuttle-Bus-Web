@@ -1,0 +1,40 @@
+# Optional server overlay. Use together with docker-compose.yml; Compose >=2.24.4.
+# Follow docs/DEPLOY.md and fix the documented auth issues before public access.
+services:
+  mongo:
+    ports: !reset []
+    # Do not import demo data/accounts on a fresh server volume.
+    volumes: !override
+      - mongo-data:/data/db
+  backend:
+    ports: !reset []
+    environment:
+      SECRET_KEY: ${SECRET_KEY:?Set a strong SECRET_KEY in root .env}
+  admin-web:
+    ports: !reset []
+  user-web:
+    ports: !reset []
+  gateway:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      USER_DOMAIN: ${USER_DOMAIN:?Set USER_DOMAIN}
+      ADMIN_DOMAIN: ${ADMIN_DOMAIN:?Set ADMIN_DOMAIN}
+      API_DOMAIN: ${API_DOMAIN:?Set API_DOMAIN}
+    volumes:
+      - ./docker/deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+      admin-web:
+        condition: service_healthy
+      user-web:
+        condition: service_healthy
+volumes:
+  caddy-data:
+  caddy-config:

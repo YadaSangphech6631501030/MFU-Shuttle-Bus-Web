@@ -261,4 +261,5 @@ Backend แบ่ง route หลักตามนี้:
 - [docs/REALTIME.md](docs/REALTIME.md) - Supabase Realtime, fallback และ troubleshooting
 - [docs/GPS.md](docs/GPS.md) - การตั้งค่า GPS และตรวจข้อมูลรถ
 - [docs/DOCKER.md](docs/DOCKER.md) - คู่มือรันด้วย Docker
+- [docs/DEPLOY.md](docs/DEPLOY.md) - คู่มือขึ้นเซิร์ฟเวอร์จริง โดเมน HTTPS ย้ายข้อมูล และสำรองข้อมูล
 - [docs/AI-WORKFLOW.md](docs/AI-WORKFLOW.md) - แนวทางทำงานกับ AI ใน repo
